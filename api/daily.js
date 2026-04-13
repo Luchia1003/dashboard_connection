@@ -4,7 +4,7 @@ const crypto = require('crypto');
 function getPrivateKey() {
   const key = process.env.SNOWFLAKE_PRIVATE_KEY.replace(/\\n/g, '\n');
   return crypto.createPrivateKey({ key, format: 'pem' })
-    .export({ type: 'pkcs8', format: 'der' });
+    .export({ type: 'pkcs8', format: 'pem' });
 }
 
 function getConnection() {
