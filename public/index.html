@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sales Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50:'#f0f9ff', 500:'#0ea5e9', 600:'#0284c7', 700:'#0369a1' },
+            surface: '#0f172a',
+            card: '#1e293b',
+            border: '#334155',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background-color: #0f172a; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; }
+    .kpi-card { background: linear-gradient(135deg, #1e293b 0%, #1a2744 100%); border: 1px solid #334155; border-radius: 0.75rem; }
+    .badge-up { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+    .badge-down { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+    .badge-surge { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+    .badge-neutral { background: rgba(100,116,139,0.15); color: #94a3b8; border: 1px solid rgba(100,116,139,0.3); }
+    .insight-warning { background: rgba(239,68,68,0.1); border-left: 3px solid #ef4444; }
+    .insight-surge { background: rgba(16,185,129,0.1); border-left: 3px solid #10b981; }
+    .insight-caution { background: rgba(245,158,11,0.1); border-left: 3px solid #f59e0b; }
+    .nav-link { transition: all 0.2s; }
+    .nav-link:hover { background: #334155; }
+    .nav-link.active { background: #0ea5e9; color: white; }
+    .skeleton { background: linear-gradient(90deg, #1e293b 25%, #2d3f57 50%, #1e293b 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 0.5rem; }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- Sidebar -->
+  <aside class="fixed left-0 top-0 h-full w-56 bg-[#0a1628] border-r border-[#334155] z-40 flex flex-col">
+    <div class="p-5 border-b border-[#334155]">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+        </div>
+        <span class="font-semibold text-white text-sm">Analytics</span>
+      </div>
+    </div>
+    <nav class="flex-1 p-3 space-y-1">
+      <a href="index.html" class="nav-link active flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>
+        Sales Overview
+      </a>
+      <a href="product.html" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+        </svg>
+        Product Detail
+      </a>
+    </nav>
+    <div class="p-4 border-t border-[#334155]">
+      <div id="lastUpdated" class="text-xs text-slate-500">Loading...</div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="ml-56 min-h-screen p-6">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <h1 class="text-2xl font-bold text-white">Sales Dashboard</h1>
+        <p class="text-slate-400 text-sm mt-1">All-time performance overview</p>
+      </div>
+      <div id="loadingBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-400 text-xs">
+        <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        Loading data...
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div id="kpiSection" class="grid grid-cols-4 gap-4 mb-8">
+      <div class="kpi-card p-5 skeleton h-28"></div>
+      <div class="kpi-card p-5 skeleton h-28"></div>
+      <div class="kpi-card p-5 skeleton h-28"></div>
+      <div class="kpi-card p-5 skeleton h-28"></div>
+    </div>
+
+    <!-- Time Comparisons -->
+    <div class="card p-6 mb-6">
+      <h2 class="text-base font-semibold text-white mb-5">Time Comparisons</h2>
+      <div id="timeComparisons" class="grid grid-cols-4 gap-4">
+        <div class="skeleton h-40 rounded-lg"></div>
+        <div class="skeleton h-40 rounded-lg"></div>
+        <div class="skeleton h-40 rounded-lg"></div>
+        <div class="skeleton h-40 rounded-lg"></div>
+      </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-2 gap-6 mb-6">
+      <div class="card p-6">
+        <h2 class="text-base font-semibold text-white mb-4">Order Count Trend</h2>
+        <div class="relative h-64">
+          <canvas id="orderTrendChart"></canvas>
+          <div id="orderChartSkeleton" class="absolute inset-0 skeleton rounded-lg"></div>
+        </div>
+      </div>
+      <div class="card p-6">
+        <h2 class="text-base font-semibold text-white mb-4">Financials Over Time</h2>
+        <div class="relative h-64">
+          <canvas id="financialChart"></canvas>
+          <div id="financialChartSkeleton" class="absolute inset-0 skeleton rounded-lg"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced Insights -->
+    <div class="card p-6">
+      <h2 class="text-base font-semibold text-white mb-4">Advanced Insights</h2>
+      <div id="insights" class="space-y-3">
+        <div class="skeleton h-12 rounded-lg"></div>
+        <div class="skeleton h-12 rounded-lg"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <script src="js/daily.js"></script>
+</body>
+</html>
