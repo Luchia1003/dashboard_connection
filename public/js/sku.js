@@ -150,8 +150,11 @@ function renderSKUTable(filteredData, fullData) {
     const n    = parseInt(period);
     const ri   = n === 7 ? 0 : n === 14 ? 1 : 2;
     const r    = s.rolling[ri] || s.rolling[0];
-    const tKey = { revenue: 'revTotal', profit: 'profTotal', orders: 'ordTotal', margin: 'margTotal', returnRate: 'rrP' }[metric];
-    return r[tKey] ?? 0;
+    // Sort by the badge percentage: (rolling daily avg − baseline) / |baseline|
+    const pKey = { revenue: 'revP', profit: 'profP', orders: 'ordP', margin: 'margP', returnRate: 'rrP' }[metric];
+    const aKey = { revenue: 'revA', profit: 'profA', orders: 'ordA', margin: 'margA', returnRate: 'rrA' }[metric];
+    const base = r[aKey];
+    return (base && base !== 0) ? (r[pKey] - base) / Math.abs(base) : 0;
   }
   skus.sort((a, b) => {
     const diff = getSortVal(b) - getSortVal(a);
