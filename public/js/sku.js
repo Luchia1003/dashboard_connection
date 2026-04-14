@@ -9,9 +9,9 @@ window.renderProductsPage = renderProductsPage;
 
 function fields(mode) {
   return {
-    net:    { rev: 'NET_GROSS_SALES',    profit: 'NET_PROFIT',    orders: 'NET_ORDER_COUNT', margin: 'NET_MARGIN',    mPct: 'NET_MARGIN_PCT', showRet: true },
-    order:  { rev: 'ORDER_GROSS_SALES',  profit: 'ORDER_PROFIT',  orders: 'ORDER_COUNT',     margin: 'ORDER_MARGIN',  mPct: null,             showRet: false },
-    refund: { rev: 'REFUND_GROSS_SALES', profit: 'REFUND_PROFIT', orders: 'REFUND_COUNT',    margin: 'REFUND_MARGIN', mPct: null,             showRet: false },
+    net:    { rev: 'NET_GROSS_SALES',    profit: 'NET_PROFIT',    orders: 'NET_QUANTITY',    margin: 'NET_MARGIN',    mPct: 'NET_MARGIN_PCT', showRet: true },
+    order:  { rev: 'ORDER_GROSS_SALES',  profit: 'ORDER_PROFIT',  orders: 'ORDER_QUANTITY',  margin: 'ORDER_MARGIN',  mPct: null,             showRet: false },
+    refund: { rev: 'REFUND_GROSS_SALES', profit: 'REFUND_PROFIT', orders: 'REFUND_QUANTITY', margin: 'REFUND_MARGIN', mPct: null,             showRet: false },
   }[mode] || {};
 }
 
@@ -27,9 +27,9 @@ function skuLastN(rows, n) {
 // ── Compute per-SKU metrics ───────────────────────────────────────────────────
 
 function computeSku(filteredRows, fullRows, f) {
-  const rev    = sum(filteredRows, f.rev);
-  const profit = sum(filteredRows, f.profit);
-  const orders = sum(filteredRows, f.orders);
+  const rev       = sum(filteredRows, f.rev);
+  const profit    = sum(filteredRows, f.profit);
+  const orders    = sum(filteredRows, f.orders);
   const marginAmt = sum(filteredRows, f.margin);
 
   let mPct = null;
@@ -42,28 +42,30 @@ function computeSku(filteredRows, fullRows, f) {
 
   // Return rate: always based on full rows (not filtered)
   const full30 = skuLastN(fullRows, 30);
-  const rr30 = full30.length ? Math.abs(sum(full30, 'REFUND_QUANTITY')) / (sum(full30, 'ORDER_QUANTITY') || 1) : null;
-  const rrAll = fullRows.length ? Math.abs(sum(fullRows, 'REFUND_QUANTITY')) / (sum(fullRows, 'ORDER_QUANTITY') || 1) : null;
+  const rr30   = full30.length   ? Math.abs(sum(full30, 'REFUND_QUANTITY'))    / (sum(full30, 'ORDER_QUANTITY') || 1)    : null;
+  const rrAll  = fullRows.length ? Math.abs(sum(fullRows, 'REFUND_QUANTITY'))  / (sum(fullRows, 'ORDER_QUANTITY') || 1)  : null;
 
   let retAlert = null;
   if (rr30 !== null) {
     if (rrAll !== null && rr30 > rrAll * 1.5) retAlert = 'danger';
-    else if (rr30 > 0.10) retAlert = 'warn';
+    else if (rr30 > 0.10)                     retAlert = 'warn';
   }
 
-  // Rolling (7/14/30d vs full avg) — always full rows
+  // Rolling (7/14/30d daily avg vs full-period daily avg) — always full rows
   const fd = fullRows.length || 1;
   const rolling = [7, 14, 30].map(n => {
-    const p = skuLastN(fullRows, n);
+    const p  = skuLastN(fullRows, n);
     const pd = p.length || 1;
     return {
       n,
-      revP:   sum(p, 'NET_GROSS_SALES') / pd,
-      revA:   sum(fullRows, 'NET_GROSS_SALES') / fd,
-      profP:  sum(p, 'NET_PROFIT') / pd,
-      profA:  sum(fullRows, 'NET_PROFIT') / fd,
-      rrP:    p.length ? Math.abs(sum(p, 'REFUND_QUANTITY')) / (sum(p, 'ORDER_QUANTITY') || 1) : null,
-      rrA:    rrAll,
+      revP:  sum(p, 'NET_GROSS_SALES') / pd,
+      revA:  sum(fullRows, 'NET_GROSS_SALES') / fd,
+      profP: sum(p, 'NET_PROFIT')      / pd,
+      profA: sum(fullRows, 'NET_PROFIT')      / fd,
+      ordP:  sum(p, 'NET_QUANTITY')    / pd,
+      margP: sum(p, 'NET_MARGIN')      / pd,
+      rrP:   p.length ? Math.abs(sum(p, 'REFUND_QUANTITY')) / (sum(p, 'ORDER_QUANTITY') || 1) : null,
+      rrA:   rrAll,
     };
   });
 
@@ -83,9 +85,11 @@ function badge(cur, base) {
 // ── Render Table ──────────────────────────────────────────────────────────────
 
 function renderSKUTable(filteredData, fullData) {
-  const f = fields(S.mode);
-  const sortBy = document.getElementById('sortSel').value;
-  const topN = parseInt(document.getElementById('topSel').value);
+  const f      = fields(S.mode);
+  const metric = (document.getElementById('sortMetric') || {}).value || 'revenue';
+  const period = (document.getElementById('sortPeriod') || {}).value || 'total';
+  const dir    = (document.getElementById('sortDir')    || {}).value || 'desc';
+  const topN   = parseInt(document.getElementById('topSel').value);
 
   // Group filtered rows by SKU
   const fMap = {};
@@ -103,25 +107,26 @@ function renderSKUTable(filteredData, fullData) {
     fullMap[k].push(r);
   });
 
-  // Compute
+  // Compute per-SKU
   const skus = Object.values(fMap).map(({ sku, desc, rows }) => ({
     sku, desc,
     ...computeSku(rows, fullMap[sku] || [], f),
   }));
 
-  // Sort
-  const sorts = {
-    revenue:  (a, b) => b.rev - a.rev,
-    profit:   (a, b) => b.profit - a.profit,
-    orders:   (a, b) => b.orders - a.orders,
-    returnRate:(a,b) => (b.rr30 || 0) - (a.rr30 || 0),
-    r7rev:    (a, b) => b.rolling[0].revP - a.rolling[0].revP,
-    r14rev:   (a, b) => b.rolling[1].revP - a.rolling[1].revP,
-    r30rev:   (a, b) => b.rolling[2].revP - a.rolling[2].revP,
-    r7profit: (a, b) => b.rolling[0].profP - a.rolling[0].profP,
-    r7rr:     (a, b) => (b.rolling[0].rrP || 0) - (a.rolling[0].rrP || 0),
-  };
-  skus.sort(sorts[sortBy] || sorts.revenue);
+  // Sort using 3 selectors
+  function getSortVal(s) {
+    if (period === 'total') {
+      return { revenue: s.rev, profit: s.profit, orders: s.orders, margin: s.marginAmt, returnRate: s.rr30 || 0 }[metric] || 0;
+    }
+    const n  = parseInt(period);
+    const ri = n === 7 ? 0 : n === 14 ? 1 : 2;
+    const r  = s.rolling[ri] || s.rolling[0];
+    return { revenue: r.revP, profit: r.profP, orders: r.ordP, margin: r.margP, returnRate: r.rrP || 0 }[metric] || 0;
+  }
+  skus.sort((a, b) => {
+    const diff = getSortVal(b) - getSortVal(a);
+    return dir === 'asc' ? -diff : diff;
+  });
 
   const visible = skus.slice(0, topN);
 
@@ -135,9 +140,9 @@ function renderSKUTable(filteredData, fullData) {
   }
 
   tbody.innerHTML = visible.map((s, i) => {
-    const rolling = s.rolling.map(r => `
-      <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
-        <span style="font-size:10px;color:var(--text3);width:22px;">${r.n}d</span>
+    const rollingHtml = s.rolling.map(r => `
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-bottom:2px;">
+        <span style="font-size:10px;color:var(--text3);width:22px;text-align:right;">${r.n}d</span>
         ${badge(r.revP, r.revA)}
       </div>`).join('');
 
@@ -171,7 +176,7 @@ function renderSKUTable(filteredData, fullData) {
           ${s.mPct !== null ? `<div style="font-size:11px;color:var(--text3);">${fmt(s.mPct, 'pct')}</div>` : ''}
         </td>
         ${retCell}
-        <td style="text-align:right;" class="hide-mobile">${rolling}</td>
+        <td style="text-align:right;vertical-align:middle;" class="hide-mobile">${rollingHtml}</td>
       </tr>`;
   }).join('');
 }

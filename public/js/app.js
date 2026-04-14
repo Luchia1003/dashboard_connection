@@ -4,12 +4,12 @@ const S = {
   daily: null,
   sku: null,
   page: 'sales',
-  tr: 'all',         // time range key
+  tr: 'all',
   customFrom: '',
   customTo: '',
   theme: localStorage.getItem('theme') || 'dark',
-  salesMode: 'net',  // net | order | refund  (Sales Overview)
-  mode: 'net',       // net | order | refund  (Product Detail)
+  salesMode: 'net',
+  mode: 'net',
   yoyMetric: 'revenue',
   charts: {},
 };
@@ -46,7 +46,6 @@ function computeRange(key, from, to) {
   const monOff = dow === 0 ? -6 : 1 - dow;
   switch (key) {
     case 'all': return null;
-    case 'today': return { f: toStr(now), t: toStr(now) };
     case 'yesterday': { const d = new Date(now); d.setDate(d.getDate() - 1); return { f: toStr(d), t: toStr(d) }; }
     case 'thisWeek': { const d = new Date(now); d.setDate(d.getDate() + monOff); return { f: toStr(d), t: toStr(now) }; }
     case 'lastWeek': { const m = new Date(now); m.setDate(m.getDate() + monOff - 7); const s = new Date(m); s.setDate(s.getDate() + 6); return { f: toStr(m), t: toStr(s) }; }
@@ -79,60 +78,65 @@ function getDaily() { return filterData(S.daily, S.tr, S.customFrom, S.customTo)
 function getSku()   { return filterData(S.sku,   S.tr, S.customFrom, S.customTo); }
 window.getDaily = getDaily; window.getSku = getSku; window.filterData = filterData;
 
-// ── Time Range UI ─────────────────────────────────────────────────────────────
+// ── Time Range — 3-box UI ─────────────────────────────────────────────────────
 
-const LABELS = {
-  all:'All Time', today:'Today', yesterday:'Yesterday', thisWeek:'This Week',
-  lastWeek:'Last Week', thisMonth:'This Month', lastMonth:'Last Month',
-  last7:'Last 7 Days', last14:'Last 14 Days', last30:'Last 30 Days', last90:'Last 90 Days',
-  thisYear:'This Year', lastYear:'Last Year', custom:'Custom Range',
-};
-
-function toggleTRMenu(e) {
-  e.stopPropagation();
-  const m = document.getElementById('trMenu');
-  m.style.display = m.style.display === 'none' ? 'block' : 'none';
-}
-window.toggleTRMenu = toggleTRMenu;
-
-document.addEventListener('click', () => { document.getElementById('trMenu').style.display = 'none'; });
-document.getElementById('trMenu').addEventListener('click', e => e.stopPropagation());
-
-function setTR(key, label) {
-  if (key === 'custom') {
-    const p = document.getElementById('customPanel');
-    p.style.display = p.style.display === 'none' ? 'block' : 'none';
-    return;
-  }
-  S.tr = key;
-  document.getElementById('trLabel').textContent = label || LABELS[key] || key;
-  document.getElementById('trMenu').style.display = 'none';
-  document.querySelectorAll('#trMenu .di[data-r]').forEach(el => el.classList.toggle('active', el.dataset.r === key));
+function onQuickRange(sel) {
+  if (!sel.value) { clearTR(); return; }
+  document.getElementById('trMonth').value = '';
+  document.getElementById('trFrom').value = '';
+  document.getElementById('trTo').value = '';
+  S.tr = sel.value; S.customFrom = ''; S.customTo = '';
+  showClear(sel.options[sel.selectedIndex].text);
   rerender();
 }
 
-function applyCustom() {
-  const f = document.getElementById('customFrom').value;
-  const t = document.getElementById('customTo').value;
+function onMonthRange(sel) {
+  if (!sel.value) { clearTR(); return; }
+  document.getElementById('trQuick').value = '';
+  document.getElementById('trFrom').value = '';
+  document.getElementById('trTo').value = '';
+  S.tr = 'm:' + sel.value; S.customFrom = ''; S.customTo = '';
+  showClear(sel.value);
+  rerender();
+}
+
+function onCustomRange() {
+  const f = document.getElementById('trFrom').value;
+  const t = document.getElementById('trTo').value;
   if (!f || !t) return;
+  document.getElementById('trQuick').value = '';
+  document.getElementById('trMonth').value = '';
   S.tr = 'custom'; S.customFrom = f; S.customTo = t;
-  document.getElementById('trLabel').textContent = `${f} → ${t}`;
-  document.getElementById('trMenu').style.display = 'none';
-  document.querySelectorAll('#trMenu .di[data-r]').forEach(el => el.classList.toggle('active', false));
+  showClear(`${f} – ${t}`);
   rerender();
 }
-window.applyCustom = applyCustom;
 
-document.querySelectorAll('#trMenu .di[data-r]').forEach(el => {
-  el.addEventListener('click', () => setTR(el.dataset.r, el.textContent.trim()));
-});
+function clearTR() {
+  document.getElementById('trQuick').value = '';
+  document.getElementById('trMonth').value = '';
+  document.getElementById('trFrom').value = '';
+  document.getElementById('trTo').value = '';
+  S.tr = 'all'; S.customFrom = ''; S.customTo = '';
+  document.getElementById('trClear').style.display = 'none';
+  rerender();
+}
+
+function showClear(label) {
+  const btn = document.getElementById('trClear');
+  btn.textContent = `✕  ${label}`;
+  btn.style.display = '';
+}
 
 function populateMonths(data) {
   const months = [...new Set(data.map(r => r.DATE.slice(0, 7)))].sort().reverse();
-  document.getElementById('monthsList').innerHTML = months.map(m =>
-    `<div class="di" data-r="m:${m}" onclick="setTR('m:${m}','${m}')">${m}</div>`
-  ).join('');
+  const sel = document.getElementById('trMonth');
+  sel.innerHTML = `<option value="">By Month</option>` + months.map(m => `<option value="${m}">${m}</option>`).join('');
 }
+
+window.onQuickRange = onQuickRange;
+window.onMonthRange = onMonthRange;
+window.onCustomRange = onCustomRange;
+window.clearTR = clearTR;
 
 function rerender() {
   if (!S.daily || !S.sku) return;
@@ -179,7 +183,7 @@ function applyTheme(t) {
 }
 function toggleTheme() {
   applyTheme(S.theme === 'dark' ? 'light' : 'dark');
-  if (S.daily) renderCharts(getDaily());
+  if (S.daily) renderCharts(getDaily(), S.salesMode);
 }
 window.toggleTheme = toggleTheme;
 applyTheme(S.theme);
@@ -204,7 +208,7 @@ window.setMode = setMode;
 
 function setYoyMetric(metric) {
   S.yoyMetric = metric;
-  if (S.daily) renderYoYChart(getDaily(), S.daily);
+  if (S.daily) renderYoYChart(getDaily(), S.daily, S.salesMode);
 }
 window.setYoyMetric = setYoyMetric;
 
@@ -230,7 +234,6 @@ async function init() {
     document.getElementById('loadingOverlay').style.display = 'none';
 
     renderSalesPage();
-    // Pre-render products for instant switching
     renderProductsPage();
 
   } catch (err) {

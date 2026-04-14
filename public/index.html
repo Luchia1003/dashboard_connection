@@ -68,16 +68,6 @@
     td { padding: 11px 14px; border-bottom: 1px solid var(--sep); font-size: 13px; }
     tr:hover td { background: var(--row-hover); }
 
-    .dropdown-menu {
-      position: absolute; top: calc(100% + 6px); right: 0; background: var(--card);
-      border: 1px solid var(--border); border-radius: 10px; z-index: 200;
-      box-shadow: 0 12px 40px rgba(0,0,0,.35); min-width: 190px; overflow: hidden;
-    }
-    .di { padding: 7px 14px; cursor: pointer; font-size: 13px; color: var(--text2); }
-    .di:hover { background: var(--hover); color: var(--text); }
-    .di.active { color: #0ea5e9; font-weight: 600; }
-    .dsep { height: 1px; background: var(--border); margin: 3px 0; }
-
     .skeleton {
       background: linear-gradient(90deg, var(--card) 25%, var(--input) 50%, var(--card) 75%);
       background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px;
@@ -156,44 +146,28 @@
     <h1 id="pageTitle" style="font-size:18px;font-weight:700;color:var(--text);">Sales Dashboard</h1>
     <div style="flex:1;"></div>
 
-    <!-- Time Range Dropdown -->
-    <div style="position:relative;" id="timeRangeWrapper">
-      <button id="timeRangeBtn" onclick="toggleTRMenu(event)" style="display:flex;align-items:center;gap:6px;background:var(--input);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:500;white-space:nowrap;">
-        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-        <span id="trLabel">All Time</span>
-        <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-      </button>
-      <div id="trMenu" class="dropdown-menu" style="display:none;max-height:440px;overflow-y:auto;">
-        <div class="di active" data-r="all">All Time</div>
-        <div class="dsep"></div>
-        <div class="di" data-r="today">Today</div>
-        <div class="di" data-r="yesterday">Yesterday</div>
-        <div class="dsep"></div>
-        <div class="di" data-r="thisWeek">This Week</div>
-        <div class="di" data-r="lastWeek">Last Week</div>
-        <div class="dsep"></div>
-        <div class="di" data-r="thisMonth">This Month</div>
-        <div class="di" data-r="lastMonth">Last Month</div>
-        <div class="dsep"></div>
-        <div id="monthsList" style="max-height:130px;overflow-y:auto;"></div>
-        <div class="dsep"></div>
-        <div class="di" data-r="last7">Last 7 Days</div>
-        <div class="di" data-r="last14">Last 14 Days</div>
-        <div class="di" data-r="last30">Last 30 Days</div>
-        <div class="di" data-r="last90">Last 90 Days</div>
-        <div class="dsep"></div>
-        <div class="di" data-r="thisYear">This Year</div>
-        <div class="di" data-r="lastYear">Last Year</div>
-        <div class="dsep"></div>
-        <div class="di" data-r="custom" id="customToggle">Custom Range…</div>
-        <div id="customPanel" style="display:none;padding:8px 12px 12px;border-top:1px solid var(--border);">
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            <input type="date" id="customFrom" class="ctrl-inp" style="width:100%;" />
-            <input type="date" id="customTo" class="ctrl-inp" style="width:100%;" />
-            <button onclick="applyCustom()" style="background:#0ea5e9;color:white;border:none;border-radius:6px;padding:5px;font-size:12px;cursor:pointer;font-weight:500;">Apply</button>
-          </div>
-        </div>
-      </div>
+    <!-- 3-box Time Range -->
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;" id="trControls">
+      <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      <!-- Box 1: Quick ranges -->
+      <select id="trQuick" class="ctrl-sel" style="min-width:118px;" onchange="onQuickRange(this)">
+        <option value="">Quick Range</option>
+        <option value="yesterday">Yesterday</option>
+        <option value="last7">Last 7 Days</option>
+        <option value="last14">Last 14 Days</option>
+        <option value="last30">Last 30 Days</option>
+        <option value="last90">Last 90 Days</option>
+      </select>
+      <!-- Box 2: Month picker -->
+      <select id="trMonth" class="ctrl-sel" style="min-width:100px;" onchange="onMonthRange(this)">
+        <option value="">By Month</option>
+      </select>
+      <!-- Box 3: Custom date range -->
+      <input type="date" id="trFrom" class="ctrl-inp" style="width:118px;font-size:11px;" onchange="onCustomRange()" />
+      <span style="font-size:11px;color:var(--text3);">–</span>
+      <input type="date" id="trTo" class="ctrl-inp" style="width:118px;font-size:11px;" onchange="onCustomRange()" />
+      <!-- Clear button -->
+      <button id="trClear" onclick="clearTR()" style="display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer;color:var(--text3);white-space:nowrap;font-weight:500;">✕ All Time</button>
     </div>
 
     <!-- Theme toggle -->
@@ -299,18 +273,24 @@
           <button class="toggle-btn" onclick="setMode('refund',this)">Refund</button>
         </div>
         <div style="width:1px;height:22px;background:var(--border);"></div>
-        <div style="display:flex;align-items:center;gap:7px;">
-          <span style="font-size:12px;color:var(--text3);">Sort by</span>
-          <select id="sortSel" class="ctrl-sel" onchange="renderProductsPage()">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="font-size:12px;color:var(--text3);">Sort</span>
+          <select id="sortMetric" class="ctrl-sel" onchange="renderProductsPage()">
             <option value="revenue">Revenue</option>
             <option value="profit">Profit</option>
-            <option value="orders">Orders</option>
+            <option value="orders">Qty/Orders</option>
+            <option value="margin">Margin $</option>
             <option value="returnRate">Return Rate</option>
-            <option value="r7rev">Rolling 7d Revenue</option>
-            <option value="r14rev">Rolling 14d Revenue</option>
-            <option value="r30rev">Rolling 30d Revenue</option>
-            <option value="r7profit">Rolling 7d Profit</option>
-            <option value="r7rr">Rolling 7d Return Rate</option>
+          </select>
+          <select id="sortPeriod" class="ctrl-sel" onchange="renderProductsPage()">
+            <option value="total">Total Period</option>
+            <option value="7">Rolling 7d</option>
+            <option value="14">Rolling 14d</option>
+            <option value="30">Rolling 30d</option>
+          </select>
+          <select id="sortDir" class="ctrl-sel" onchange="renderProductsPage()">
+            <option value="desc">High → Low</option>
+            <option value="asc">Low → High</option>
           </select>
         </div>
         <div style="display:flex;align-items:center;gap:7px;">

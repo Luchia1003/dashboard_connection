@@ -16,9 +16,9 @@ window.renderSalesPage = renderSalesPage;
 
 function salesF(mode) {
   return {
-    net:    { orders: 'NET_ORDER_COUNT', rev: 'NET_GROSS_SALES', profit: 'NET_PROFIT', pSales: 'NET_PRODUCT_SALES', margin: 'NET_MARGIN', mPct: 'NET_MARGIN_PCT' },
-    order:  { orders: 'ORDER_COUNT',     rev: 'ORDER_GROSS_SALES', profit: 'ORDER_PROFIT', pSales: 'ORDER_PRODUCT_SALES', margin: 'ORDER_MARGIN', mPct: null },
-    refund: { orders: 'REFUND_COUNT',    rev: 'REFUND_GROSS_SALES', profit: 'REFUND_PROFIT', pSales: 'REFUND_PRODUCT_SALES', margin: 'REFUND_MARGIN', mPct: null },
+    net:    { orders: 'NET_QUANTITY',    rev: 'NET_GROSS_SALES',    profit: 'NET_PROFIT',    pSales: 'NET_PRODUCT_SALES',    margin: 'NET_MARGIN',    mPct: 'NET_MARGIN_PCT' },
+    order:  { orders: 'ORDER_QUANTITY',  rev: 'ORDER_GROSS_SALES',  profit: 'ORDER_PROFIT',  pSales: 'ORDER_PRODUCT_SALES',  margin: 'ORDER_MARGIN',  mPct: null },
+    refund: { orders: 'REFUND_QUANTITY', rev: 'REFUND_GROSS_SALES', profit: 'REFUND_PROFIT', pSales: 'REFUND_PRODUCT_SALES', margin: 'REFUND_MARGIN', mPct: null },
   }[mode] || {};
 }
 
@@ -80,8 +80,8 @@ function renderKPIs(data, mode) {
       icon: `<svg width="18" height="18" fill="none" stroke="${profit >= 0 ? '#10b981' : '#ef4444'}" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>`,
     },
     {
-      label: `${ml} Orders`, val: fmt(orders, 'int'),
-      sub: `${ml} order count`,
+      label: `${ml} Quantity`, val: fmt(orders, 'int'),
+      sub: `${ml} units sold`,
       color: 'rgba(139,92,246,.12)', accent: '#8b5cf6',
       icon: `<svg width="18" height="18" fill="none" stroke="#8b5cf6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>`,
     },
@@ -97,11 +97,11 @@ function renderKPIs(data, mode) {
     <div class="kpi-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
         <div style="width:36px;height:36px;border-radius:9px;background:${c.color};display:flex;align-items:center;justify-content:center;">${c.icon}</div>
-        <span style="font-size:12px;font-weight:700;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;">${c.label}</span>
+        <span style="font-size:13px;font-weight:700;color:var(--text2);letter-spacing:.03em;">${c.label}</span>
       </div>
-      <div style="font-size:36px;font-weight:800;color:var(--text);line-height:1;margin-bottom:${c.isMargin ? '5px' : '10px'};">${c.val}</div>
-      ${c.isMargin ? `<div style="font-size:17px;font-weight:600;color:var(--text2);margin-bottom:8px;">${c.val2}</div>` : ''}
-      <div style="font-size:13px;font-weight:500;color:var(--text2);">${c.sub}</div>
+      <div style="font-size:38px;font-weight:800;color:var(--text);line-height:1;margin-bottom:${c.isMargin ? '6px' : '10px'};">${c.val}</div>
+      ${c.isMargin ? `<div style="font-size:18px;font-weight:600;color:var(--text2);margin-bottom:8px;">${c.val2}</div>` : ''}
+      <div style="font-size:14px;font-weight:500;color:var(--text2);">${c.sub}</div>
     </div>
   `).join('');
 }
@@ -131,7 +131,7 @@ function renderTimeComparisons(full) {
   ];
 
   const metrics = [
-    { l: 'Orders',        f: 'NET_ORDER_COUNT',   t: 'int' },
+    { l: 'Quantity',      f: 'NET_QUANTITY',      t: 'int' },
     { l: 'Revenue',       f: 'NET_GROSS_SALES',   t: 'currency' },
     { l: 'Profit',        f: 'NET_PROFIT',        t: 'currency' },
     { l: 'Product Sales', f: 'NET_PRODUCT_SALES', t: 'currency' },
@@ -149,11 +149,11 @@ function renderTimeComparisons(full) {
       const cls = surge ? 'badge-surge' : up ? 'badge-up' : d === null ? 'badge-neu' : 'badge-down';
       const label = d === null ? '—' : surge ? `↑ ${(d*100).toFixed(1)}% ⚡` : up ? `↑ ${(d*100).toFixed(1)}%` : `↓ ${(Math.abs(d)*100).toFixed(1)}%`;
       return `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--sep);">
-          <span style="font-size:13px;font-weight:500;color:var(--text2);">${m.l}</span>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:15px;font-weight:700;color:var(--text);">${fmt(cTotal, m.t)}</span>
-            <span class="${cls}" style="font-size:11px;padding:2px 7px;border-radius:20px;white-space:nowrap;">${label}</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--sep);">
+          <span style="font-size:14px;font-weight:600;color:var(--text2);">${m.l}</span>
+          <div style="display:flex;align-items:center;gap:7px;">
+            <span style="font-size:17px;font-weight:800;color:var(--text);">${fmt(cTotal, m.t)}</span>
+            <span class="${cls}" style="font-size:11px;padding:2px 8px;border-radius:20px;white-space:nowrap;font-weight:600;">${label}</span>
           </div>
         </div>`;
     }).join('');
@@ -161,8 +161,8 @@ function renderTimeComparisons(full) {
     return `
       <div style="background:var(--input);border-radius:10px;padding:14px;border:1px solid var(--border);">
         <div style="margin-bottom:12px;">
-          <div style="font-size:14px;font-weight:700;color:var(--text);">${cfg.title}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px;">${cfg.sub}</div>
+          <div style="font-size:16px;font-weight:800;color:var(--text);">${cfg.title}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:3px;">${cfg.sub}</div>
         </div>
         ${rows}
       </div>`;
