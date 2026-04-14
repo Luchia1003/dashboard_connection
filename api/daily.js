@@ -1,5 +1,6 @@
 const snowflake = require('snowflake-sdk');
 const crypto = require('crypto');
+const requireAuth = require('./middleware/auth');
 
 function getPrivateKey() {
   const key = process.env.SNOWFLAKE_PRIVATE_KEY.replace(/\\n/g, '\n');
@@ -26,20 +27,18 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  const user = requireAuth(req, res);
+  if (!user) return;
+
   const conn = getConnection();
-
   try {
-    await new Promise((resolve, reject) => {
-      conn.connect((err) => err ? reject(err) : resolve());
-    });
-
+    await new Promise((resolve, reject) => conn.connect(err => err ? reject(err) : resolve()));
     const rows = await new Promise((resolve, reject) => {
       conn.execute({
         sqlText: `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.ORDER_DAILY_METRICS ORDER BY DATE ASC`,
         complete: (err, stmt, rows) => err ? reject(err) : resolve(rows),
       });
     });
-
     res.status(200).json(rows);
   } catch (err) {
     console.error(err);

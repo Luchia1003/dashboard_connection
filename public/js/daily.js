@@ -1,381 +1,228 @@
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Sales Page ────────────────────────────────────────────────────────────────
 
-function fmt(val, type = 'currency') {
-  if (val == null || isNaN(val)) return '—';
-  if (type === 'currency') {
-    const abs = Math.abs(val);
-    if (abs >= 1_000_000) return (val < 0 ? '-' : '') + '$' + (abs / 1_000_000).toFixed(2) + 'M';
-    if (abs >= 1_000) return (val < 0 ? '-' : '') + '$' + (abs / 1_000).toFixed(1) + 'K';
-    return '$' + val.toFixed(2);
-  }
-  if (type === 'pct') return (val * 100).toFixed(1) + '%';
-  if (type === 'int') return Math.round(val).toLocaleString();
-  return val;
+function renderSalesPage() {
+  const filtered = getDaily();
+  const full = S.daily;
+  renderKPIs(filtered);
+  renderTimeComparisons(full);  // always full data
+  renderCharts(filtered);
+  renderInsights(full);         // always full data
 }
-
-function pctDiff(current, base) {
-  if (!base) return null;
-  return (current - base) / Math.abs(base);
-}
-
-function sumField(rows, field) {
-  return rows.reduce((acc, r) => acc + (r[field] || 0), 0);
-}
-
-function avgField(rows, field) {
-  if (!rows.length) return 0;
-  return sumField(rows, field) / rows.length;
-}
-
-// Get last N days of rows (excluding today if incomplete)
-function lastNDays(data, n, referenceDate) {
-  const ref = referenceDate || data[data.length - 1]?.DATE;
-  const refMs = new Date(ref).getTime();
-  return data.filter(r => {
-    const ms = new Date(r.DATE).getTime();
-    return ms <= refMs && ms > refMs - n * 86400000;
-  });
-}
-
-function prevNDays(data, n, offset, referenceDate) {
-  const ref = referenceDate || data[data.length - 1]?.DATE;
-  const refMs = new Date(ref).getTime();
-  const endMs = refMs - offset * 86400000;
-  return data.filter(r => {
-    const ms = new Date(r.DATE).getTime();
-    return ms <= endMs && ms > endMs - n * 86400000;
-  });
-}
-
-// ── Chart.js defaults ─────────────────────────────────────────────────────────
-
-Chart.defaults.color = '#94a3b8';
-Chart.defaults.borderColor = '#334155';
-Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
-Chart.defaults.font.size = 11;
+window.renderSalesPage = renderSalesPage;
 
 // ── KPI Cards ─────────────────────────────────────────────────────────────────
 
 function renderKPIs(data) {
-  const totalRevenue = sumField(data, 'NET_GROSS_SALES');
-  const totalProfit = sumField(data, 'NET_PROFIT');
-  const totalOrders = sumField(data, 'NET_ORDER_COUNT');
-  const avgMargin = avgField(data, 'NET_MARGIN_PCT');
+  if (!data.length) {
+    document.getElementById('kpiSection').innerHTML =
+      `<div style="grid-column:span 4;text-align:center;padding:32px;color:var(--text3);">No data for selected period</div>`;
+    return;
+  }
 
-  const kpis = [
-    { label: 'Net Revenue', value: fmt(totalRevenue), icon: '💰', sub: 'All-time cumulative', color: 'from-sky-500/20 to-blue-600/20' },
-    { label: 'Net Profit', value: fmt(totalProfit), icon: '📈', sub: 'All-time cumulative', color: 'from-emerald-500/20 to-green-600/20' },
-    { label: 'Total Orders', value: fmt(totalOrders, 'int'), icon: '🛒', sub: 'Net order count', color: 'from-violet-500/20 to-purple-600/20' },
-    { label: 'Avg Margin', value: fmt(avgMargin, 'pct'), icon: '📊', sub: 'Full period average', color: 'from-amber-500/20 to-orange-600/20' },
+  const revenue   = sum(data, 'NET_GROSS_SALES');
+  const profit    = sum(data, 'NET_PROFIT');
+  const orders    = sum(data, 'NET_ORDER_COUNT');
+  const marginPct = avg(data, 'NET_MARGIN_PCT');
+  const marginAmt = sum(data, 'NET_MARGIN');
+
+  const cards = [
+    {
+      label: 'NET REVENUE', val: fmt(revenue), sub: `${data.length} days of data`,
+      color: 'rgba(14,165,233,.12)', accent: '#0ea5e9',
+      icon: `<svg width="18" height="18" fill="none" stroke="#0ea5e9" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`,
+    },
+    {
+      label: 'NET PROFIT', val: fmt(profit),
+      sub: revenue ? `${fmt(profit / revenue, 'pct')} of revenue` : '',
+      color: profit >= 0 ? 'rgba(16,185,129,.12)' : 'rgba(239,68,68,.12)',
+      accent: profit >= 0 ? '#10b981' : '#ef4444',
+      icon: `<svg width="18" height="18" fill="none" stroke="${profit >= 0 ? '#10b981' : '#ef4444'}" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>`,
+    },
+    {
+      label: 'TOTAL ORDERS', val: fmt(orders, 'int'), sub: 'Net order count',
+      color: 'rgba(139,92,246,.12)', accent: '#8b5cf6',
+      icon: `<svg width="18" height="18" fill="none" stroke="#8b5cf6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>`,
+    },
+    {
+      label: 'MARGIN', val: fmt(marginPct, 'pct'), val2: fmt(marginAmt),
+      sub: 'Avg margin % · Total margin $', isMargin: true,
+      color: 'rgba(245,158,11,.12)', accent: '#f59e0b',
+      icon: `<svg width="18" height="18" fill="none" stroke="#f59e0b" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>`,
+    },
   ];
 
-  const container = document.getElementById('kpiSection');
-  container.innerHTML = kpis.map(k => `
-    <div class="kpi-card p-5 bg-gradient-to-br ${k.color}">
-      <div class="flex items-start justify-between mb-3">
-        <span class="text-xl">${k.icon}</span>
-        <span class="text-xs text-slate-500 font-medium uppercase tracking-wider">${k.label}</span>
+  document.getElementById('kpiSection').innerHTML = cards.map(c => `
+    <div class="kpi-card" style="background:linear-gradient(135deg,var(--card),var(--card));border:1px solid var(--border);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="width:34px;height:34px;border-radius:8px;background:${c.color};display:flex;align-items:center;justify-content:center;">${c.icon}</div>
+        <span style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;">${c.label}</span>
       </div>
-      <div class="text-2xl font-bold text-white mb-1">${k.value}</div>
-      <div class="text-xs text-slate-400">${k.sub}</div>
+      <div style="font-size:34px;font-weight:800;color:var(--text);line-height:1;margin-bottom:${c.isMargin ? '4px' : '8px'};">${c.val}</div>
+      ${c.isMargin ? `<div style="font-size:14px;font-weight:500;color:var(--text2);margin-bottom:6px;">${c.val2}</div>` : ''}
+      <div style="font-size:11px;color:var(--text3);">${c.sub}</div>
     </div>
   `).join('');
 }
 
-// ── Time Comparison Blocks ─────────────────────────────────────────────────────
+// ── Time Comparisons (always uses full data) ───────────────────────────────────
 
-function renderComparison(period, current, base) {
-  const metrics = [
-    { label: 'Orders', field: 'NET_ORDER_COUNT', type: 'int' },
-    { label: 'Revenue', field: 'NET_GROSS_SALES', type: 'currency' },
-    { label: 'Profit', field: 'NET_PROFIT', type: 'currency' },
-    { label: 'Product Sales', field: 'NET_PRODUCT_SALES', type: 'currency' },
+function lastN(data, n) {
+  const last = data[data.length - 1]?.DATE;
+  if (!last) return [];
+  const ms = new Date(last).getTime();
+  return data.filter(r => { const m = new Date(r.DATE).getTime(); return m <= ms && m > ms - n * 86400000; });
+}
+
+function prevN(data, n, offset) {
+  const last = data[data.length - 1]?.DATE;
+  if (!last) return [];
+  const end = new Date(last).getTime() - offset * 86400000;
+  return data.filter(r => { const m = new Date(r.DATE).getTime(); return m <= end && m > end - n * 86400000; });
+}
+
+function renderTimeComparisons(full) {
+  const configs = [
+    { title: 'Yesterday',    sub: 'vs 7d Avg',  cur: lastN(full, 1),  base: prevN(full, 7, 1) },
+    { title: 'Last 7 Days',  sub: 'vs 30d Avg', cur: lastN(full, 7),  base: prevN(full, 30, 7) },
+    { title: 'Last 14 Days', sub: 'vs 30d Avg', cur: lastN(full, 14), base: prevN(full, 30, 14) },
+    { title: 'Last 30 Days', sub: 'vs 60d Avg', cur: lastN(full, 30), base: prevN(full, 60, 30) },
   ];
 
-  const rows = metrics.map(m => {
-    const cur = sumField(current, m.field) / (current.length || 1);
-    const avg = sumField(base, m.field) / (base.length || 1);
-    const diff = pctDiff(cur, avg);
-    const isSurge = diff !== null && diff > 0.5;
-    const isUp = diff !== null && diff > 0;
-    const badgeClass = isSurge ? 'badge-surge' : isUp ? 'badge-up' : diff === null ? 'badge-neutral' : 'badge-down';
-    const arrow = isUp ? '↑' : '↓';
-    const diffLabel = diff !== null ? `${arrow} ${Math.abs(diff * 100).toFixed(1)}%${isSurge ? ' ⚡' : ''}` : '—';
+  const metrics = [
+    { l: 'Orders',       f: 'NET_ORDER_COUNT',   t: 'int' },
+    { l: 'Revenue',      f: 'NET_GROSS_SALES',   t: 'currency' },
+    { l: 'Profit',       f: 'NET_PROFIT',        t: 'currency' },
+    { l: 'Product Sales',f: 'NET_PRODUCT_SALES', t: 'currency' },
+  ];
+
+  document.getElementById('timeComparisons').innerHTML = configs.map(cfg => {
+    const cd = cfg.cur.length || 1, bd = cfg.base.length || 1;
+    const rows = metrics.map(m => {
+      const cTotal = sum(cfg.cur, m.f);
+      const cAvg = cTotal / cd;
+      const bAvg = sum(cfg.base, m.f) / bd;
+      const d = pdiff(cAvg, bAvg);
+      const surge = d !== null && d > 0.5;
+      const up = d !== null && d > 0;
+      const cls = surge ? 'badge-surge' : up ? 'badge-up' : d === null ? 'badge-neu' : 'badge-down';
+      const label = d === null ? '—' : surge ? `↑ ${(d*100).toFixed(1)}% ⚡` : up ? `↑ ${(d*100).toFixed(1)}%` : `↓ ${(Math.abs(d)*100).toFixed(1)}%`;
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--sep);">
+          <span style="font-size:11px;color:var(--text3);">${m.l}</span>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <span style="font-size:12px;font-weight:600;color:var(--text);">${fmt(cTotal, m.t)}</span>
+            <span class="${cls}" style="font-size:10px;padding:1px 6px;border-radius:20px;white-space:nowrap;">${label}</span>
+          </div>
+        </div>`;
+    }).join('');
 
     return `
-      <div class="flex items-center justify-between py-1.5 border-b border-[#1e3048] last:border-0">
-        <span class="text-xs text-slate-400">${m.label}</span>
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-medium text-white">${fmt(cur * current.length, m.type)}</span>
-          <span class="text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${badgeClass}">${diffLabel}</span>
+      <div style="background:var(--input);border-radius:10px;padding:14px;border:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:700;color:#0ea5e9;letter-spacing:.05em;margin-bottom:10px;">
+          ${cfg.title} <span style="color:var(--text3);font-weight:400;">${cfg.sub}</span>
         </div>
-      </div>
-    `;
+        ${rows}
+      </div>`;
   }).join('');
-
-  return `
-    <div class="bg-[#0f1f35] rounded-lg p-4 border border-[#2a3f55]">
-      <div class="text-xs font-semibold text-sky-400 mb-3 uppercase tracking-wider">${period}</div>
-      ${rows}
-    </div>
-  `;
 }
 
-function renderTimeComparisons(data) {
-  const lastDate = data[data.length - 1]?.DATE;
-
-  const yesterday = lastNDays(data, 1, lastDate);
-  const prev7 = prevNDays(data, 7, 1, lastDate);
-
-  const last7 = lastNDays(data, 7, lastDate);
-  const prev30 = prevNDays(data, 30, 7, lastDate);
-
-  const last14 = lastNDays(data, 14, lastDate);
-  const prev30b = prevNDays(data, 30, 14, lastDate);
-
-  const last30 = lastNDays(data, 30, lastDate);
-  const prev60 = prevNDays(data, 60, 30, lastDate);
-
-  const container = document.getElementById('timeComparisons');
-  container.innerHTML = [
-    renderComparison('Yesterday vs 7d Avg', yesterday, prev7),
-    renderComparison('Last 7d vs 30d Avg', last7, prev30),
-    renderComparison('Last 14d vs 30d Avg', last14, prev30b),
-    renderComparison('Last 30d vs 60d Avg', last30, prev60),
-  ].join('');
-}
-
-// ── Charts ─────────────────────────────────────────────────────────────────────
-
-function groupByMonth(data) {
-  const map = {};
-  data.forEach(r => {
-    const d = new Date(r.DATE);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    if (!map[key]) map[key] = { orders: 0, revenue: 0, profit: 0, marginSum: 0, days: 0 };
-    map[key].orders += r.NET_ORDER_COUNT || 0;
-    map[key].revenue += r.NET_GROSS_SALES || 0;
-    map[key].profit += r.NET_PROFIT || 0;
-    map[key].marginSum += r.NET_MARGIN_PCT || 0;
-    map[key].days++;
-  });
-  return map;
-}
+// ── Charts (respects time range) ─────────────────────────────────────────────
 
 function renderCharts(data) {
-  const monthly = groupByMonth(data);
+  document.getElementById('skelChart1').style.display = 'none';
+  document.getElementById('skelChart2').style.display = 'none';
+
+  const monthly = {};
+  data.forEach(r => {
+    const k = r.DATE.slice(0, 7);
+    if (!monthly[k]) monthly[k] = { orders: 0, rev: 0, profit: 0, mSum: 0, days: 0 };
+    monthly[k].orders += r.NET_ORDER_COUNT || 0;
+    monthly[k].rev    += r.NET_GROSS_SALES || 0;
+    monthly[k].profit += r.NET_PROFIT || 0;
+    monthly[k].mSum   += r.NET_MARGIN_PCT || 0;
+    monthly[k].days++;
+  });
+
   const labels = Object.keys(monthly).sort();
   const vals = labels.map(k => monthly[k]);
 
-  document.getElementById('orderChartSkeleton').style.display = 'none';
-  document.getElementById('financialChartSkeleton').style.display = 'none';
+  const isLight = S.theme === 'light';
+  const grid = isLight ? '#E5E7EB' : '#1e3a5f';
+  const tick = isLight ? '#6B7280' : '#94a3b8';
+  const tip = { backgroundColor: isLight ? '#fff' : '#1e293b', borderColor: isLight ? '#E5E7EB' : '#334155', borderWidth: 1, titleColor: isLight ? '#1A1A2E' : '#e2e8f0', bodyColor: tick };
 
-  // Order Count Trend
-  new Chart(document.getElementById('orderTrendChart'), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Net Orders',
-        data: vals.map(v => v.orders),
-        borderColor: '#0ea5e9',
-        backgroundColor: 'rgba(14,165,233,0.1)',
-        fill: true,
-        tension: 0.4,
-        pointRadius: 3,
-        pointHoverRadius: 5,
-        borderWidth: 2,
-      }],
-    },
+  if (S.charts.c1) { S.charts.c1.destroy(); S.charts.c1 = null; }
+  if (S.charts.c2) { S.charts.c2.destroy(); S.charts.c2 = null; }
+
+  S.charts.c1 = new Chart(document.getElementById('orderTrendChart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Net Orders', data: vals.map(v => v.orders), backgroundColor: 'rgba(14,165,233,.7)', borderColor: '#0ea5e9', borderWidth: 1, borderRadius: 4 }] },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       interaction: { intersect: false, mode: 'index' },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#1e293b',
-          borderColor: '#334155',
-          borderWidth: 1,
-          callbacks: {
-            label: ctx => ` Orders: ${Math.round(ctx.raw).toLocaleString()}`,
-          },
-        },
-      },
-      scales: {
-        x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } },
-        y: { grid: { color: '#1e3a5f' }, ticks: { callback: v => Math.round(v).toLocaleString() } },
-      },
+      plugins: { legend: { display: false }, tooltip: { ...tip, callbacks: { label: c => ` Orders: ${Math.round(c.raw).toLocaleString()}` } } },
+      scales: { x: { grid: { display: false }, ticks: { color: tick, maxTicksLimit: 8 } }, y: { grid: { color: grid }, ticks: { color: tick, callback: v => Math.round(v).toLocaleString() } } },
     },
   });
 
-  // Financials Over Time
-  new Chart(document.getElementById('financialChart'), {
+  S.charts.c2 = new Chart(document.getElementById('financialChart'), {
     type: 'line',
     data: {
       labels,
       datasets: [
-        {
-          label: 'Revenue',
-          data: vals.map(v => v.revenue),
-          borderColor: '#0ea5e9',
-          backgroundColor: 'transparent',
-          tension: 0.4, pointRadius: 2, borderWidth: 2, yAxisID: 'y',
-        },
-        {
-          label: 'Profit',
-          data: vals.map(v => v.profit),
-          borderColor: '#10b981',
-          backgroundColor: 'transparent',
-          tension: 0.4, pointRadius: 2, borderWidth: 2, yAxisID: 'y',
-        },
-        {
-          label: 'Margin %',
-          data: vals.map(v => v.days ? (v.marginSum / v.days) * 100 : 0),
-          borderColor: '#f59e0b',
-          backgroundColor: 'transparent',
-          tension: 0.4, pointRadius: 2, borderWidth: 2, yAxisID: 'y1',
-          borderDash: [4, 3],
-        },
+        { label: 'Revenue', data: vals.map(v => v.rev),    borderColor: '#0ea5e9', tension: .4, pointRadius: 2, borderWidth: 2, backgroundColor: 'transparent', yAxisID: 'y' },
+        { label: 'Profit',  data: vals.map(v => v.profit), borderColor: '#10b981', tension: .4, pointRadius: 2, borderWidth: 2, backgroundColor: 'transparent', yAxisID: 'y' },
+        { label: 'Margin%', data: vals.map(v => v.days ? (v.mSum / v.days) * 100 : 0), borderColor: '#f59e0b', tension: .4, pointRadius: 2, borderWidth: 2, backgroundColor: 'transparent', yAxisID: 'y1', borderDash: [4, 3] },
       ],
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       interaction: { intersect: false, mode: 'index' },
       plugins: {
-        legend: {
-          position: 'top',
-          align: 'end',
-          labels: { boxWidth: 12, padding: 10, font: { size: 10 } },
-        },
-        tooltip: {
-          backgroundColor: '#1e293b',
-          borderColor: '#334155',
-          borderWidth: 1,
-          callbacks: {
-            label: ctx => {
-              if (ctx.dataset.yAxisID === 'y1') return ` Margin: ${ctx.raw.toFixed(1)}%`;
-              return ` ${ctx.dataset.label}: ${fmt(ctx.raw)}`;
-            },
-          },
-        },
+        legend: { position: 'top', align: 'end', labels: { boxWidth: 10, padding: 10, font: { size: 10 }, color: tick } },
+        tooltip: { ...tip, callbacks: { label: c => c.dataset.yAxisID === 'y1' ? ` Margin: ${c.raw.toFixed(1)}%` : ` ${c.dataset.label}: ${fmt(c.raw)}` } },
       },
       scales: {
-        x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } },
-        y: { grid: { color: '#1e3a5f' }, position: 'left', ticks: { callback: v => fmt(v) } },
-        y1: { position: 'right', grid: { display: false }, ticks: { callback: v => v.toFixed(1) + '%' } },
+        x: { grid: { display: false }, ticks: { color: tick, maxTicksLimit: 8 } },
+        y:  { position: 'left',  grid: { color: grid }, ticks: { color: tick, callback: v => fmt(v) } },
+        y1: { position: 'right', grid: { display: false }, ticks: { color: tick, callback: v => v.toFixed(1) + '%' } },
       },
     },
   });
 }
+window.renderCharts = renderCharts;
 
-// ── Advanced Insights ─────────────────────────────────────────────────────────
+// ── Advanced Insights (always full data) ──────────────────────────────────────
 
-function renderInsights(data) {
-  const lastDate = data[data.length - 1]?.DATE;
-  const d7 = lastNDays(data, 7, lastDate);
-  const d14 = lastNDays(data, 14, lastDate);
-  const d30 = lastNDays(data, 30, lastDate);
+function renderInsights(full) {
+  const d7  = lastN(full, 7);
+  const d14 = lastN(full, 14);
+  const d30 = lastN(full, 30);
 
-  const avg7Rev = avgField(d7, 'NET_GROSS_SALES');
-  const avg30Rev = avgField(d30, 'NET_GROSS_SALES');
-  const avg14Margin = avgField(d14, 'NET_MARGIN_PCT');
-  const avg30Margin = avgField(d30, 'NET_MARGIN_PCT');
+  const avg7Rev    = avg(d7,  'NET_GROSS_SALES');
+  const avg30Rev   = avg(d30, 'NET_GROSS_SALES');
+  const avg14Mgn   = avg(d14, 'NET_MARGIN_PCT');
+  const avg30Mgn   = avg(d30, 'NET_MARGIN_PCT');
 
-  const insights = [];
+  const items = [];
+  if (avg7Rev > avg30Rev * 1.5)
+    items.push({ type: 'surge', icon: '⚡', title: 'Sales Surge Detected', c: '#10b981', desc: `7d avg revenue ${fmt(avg7Rev)}/day is ${((avg7Rev / avg30Rev - 1) * 100).toFixed(0)}% above 30d avg (${fmt(avg30Rev)}/day).` });
+  if (avg7Rev < avg30Rev * 0.6)
+    items.push({ type: 'warning', icon: '⚠️', title: 'Sales Drop Alert', c: '#ef4444', desc: `7d avg revenue ${fmt(avg7Rev)}/day is ${((1 - avg7Rev / avg30Rev) * 100).toFixed(0)}% below 30d avg (${fmt(avg30Rev)}/day).` });
+  if (avg30Mgn && (avg30Mgn - avg14Mgn) / Math.abs(avg30Mgn) > 0.05)
+    items.push({ type: 'caution', icon: '📉', title: 'Margin Compression', c: '#f59e0b', desc: `14d avg margin (${fmt(avg14Mgn, 'pct')}) is 5%+ below 30d avg (${fmt(avg30Mgn, 'pct')}).` });
 
-  if (avg7Rev > avg30Rev * 1.5) {
-    insights.push({
-      type: 'surge',
-      icon: '⚡',
-      title: 'Sales Surge Detected',
-      desc: `7-day avg revenue (${fmt(avg7Rev)}/day) is ${((avg7Rev / avg30Rev - 1) * 100).toFixed(0)}% above the 30-day avg (${fmt(avg30Rev)}/day).`,
-    });
-  }
-
-  if (avg7Rev < avg30Rev * 0.6) {
-    insights.push({
-      type: 'warning',
-      icon: '⚠️',
-      title: 'Sales Drop Alert',
-      desc: `7-day avg revenue (${fmt(avg7Rev)}/day) is ${((1 - avg7Rev / avg30Rev) * 100).toFixed(0)}% below the 30-day avg (${fmt(avg30Rev)}/day).`,
-    });
-  }
-
-  if (avg30Margin && (avg30Margin - avg14Margin) / Math.abs(avg30Margin) > 0.05) {
-    insights.push({
-      type: 'caution',
-      icon: '📉',
-      title: 'Margin Compression',
-      desc: `14-day avg margin (${fmt(avg14Margin, 'pct')}) is more than 5% below the 30-day avg (${fmt(avg30Margin, 'pct')}).`,
-    });
-  }
-
-  const container = document.getElementById('insights');
-
-  if (!insights.length) {
-    container.innerHTML = `
-      <div class="flex items-center gap-3 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-        <span class="text-xl">✅</span>
-        <div>
-          <div class="text-sm font-medium text-emerald-400">All Systems Normal</div>
-          <div class="text-xs text-slate-400 mt-0.5">No anomalies detected in current performance metrics.</div>
-        </div>
-      </div>
-    `;
+  const el = document.getElementById('insights');
+  if (!items.length) {
+    el.innerHTML = `<div style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:8px;background:rgba(16,185,129,.08);border-left:3px solid #10b981;"><span style="font-size:20px;">✅</span><div><div style="font-size:13px;font-weight:600;color:#10b981;">All Systems Normal</div><div style="font-size:12px;color:var(--text3);margin-top:2px;">No anomalies detected.</div></div></div>`;
     return;
   }
-
-  container.innerHTML = insights.map(ins => `
-    <div class="flex items-start gap-3 p-4 rounded-lg insight-${ins.type}">
-      <span class="text-xl mt-0.5">${ins.icon}</span>
+  el.innerHTML = items.map(i => `
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:14px;border-radius:8px;background:rgba(0,0,0,.04);border-left:3px solid ${i.c};margin-bottom:8px;">
+      <span style="font-size:20px;margin-top:1px;">${i.icon}</span>
       <div>
-        <div class="text-sm font-semibold ${ins.type === 'surge' ? 'text-emerald-400' : ins.type === 'warning' ? 'text-red-400' : 'text-amber-400'}">${ins.title}</div>
-        <div class="text-xs text-slate-400 mt-1">${ins.desc}</div>
+        <div style="font-size:13px;font-weight:600;color:${i.c};">${i.title}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:3px;">${i.desc}</div>
       </div>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
-
-// ── Main ───────────────────────────────────────────────────────────────────────
-
-async function main() {
-  try {
-    const res = await fetch('/api/daily');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-
-    if (!Array.isArray(data) || !data.length) {
-      throw new Error('No data returned from API');
-    }
-
-    // Update loading badge
-    const badge = document.getElementById('loadingBadge');
-    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> ${data.length} days loaded`;
-    badge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs';
-
-    // Last updated
-    const lastDate = data[data.length - 1]?.DATE;
-    document.getElementById('lastUpdated').textContent = `Last data: ${lastDate || 'unknown'}`;
-
-    renderKPIs(data);
-    renderTimeComparisons(data);
-    renderCharts(data);
-    renderInsights(data);
-
-  } catch (err) {
-    console.error(err);
-    const badge = document.getElementById('loadingBadge');
-    badge.innerHTML = `⚠ Error loading data`;
-    badge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs';
-
-    document.getElementById('kpiSection').innerHTML = `
-      <div class="col-span-4 p-6 text-center text-red-400 text-sm">
-        Failed to load data: ${err.message}
-      </div>
-    `;
-  }
-}
-
-main();
