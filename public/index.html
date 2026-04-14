@@ -283,7 +283,7 @@
             <option value="returnRate">Return Rate</option>
           </select>
           <select id="sortPeriod" class="ctrl-sel" onchange="renderProductsPage()">
-            <option value="total">Total Period</option>
+            <option value="total">Value</option>
             <option value="7">Rolling 7d</option>
             <option value="14">Rolling 14d</option>
             <option value="30">Rolling 30d</option>
@@ -310,16 +310,15 @@
             <thead>
               <tr>
                 <th style="text-align:left;min-width:220px;"># SKU / Product</th>
-                <th style="min-width:110px;">Revenue</th>
-                <th style="min-width:110px;">Profit</th>
-                <th style="min-width:90px;">Orders</th>
-                <th style="min-width:120px;" id="marginHeader">Margin</th>
+                <th style="min-width:140px;">Revenue</th>
+                <th style="min-width:140px;">Profit</th>
+                <th style="min-width:120px;">Orders</th>
+                <th style="min-width:150px;" id="marginHeader">Margin</th>
                 <th style="min-width:110px;" id="returnHeader">Return Rate</th>
-                <th style="min-width:130px;" class="hide-mobile">Rolling (Rev)</th>
               </tr>
             </thead>
             <tbody id="skuBody">
-              <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3);">Loading…</td></tr>
+              <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text3);">Loading…</td></tr>
             </tbody>
           </table>
         </div>
