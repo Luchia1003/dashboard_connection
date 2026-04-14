@@ -91,12 +91,12 @@ function badge(cur, base) {
   return `<span class="${cls}" style="font-size:10px;padding:1px 5px;border-radius:20px;">${d >= 0 ? '↑' : '↓'}${Math.abs(d * 100).toFixed(0)}%</span>`;
 }
 
-// ── Vertical rolling badges for one metric ────────────────────────────────────
+// ── Rolling badges column (to the LEFT of the main value) ────────────────────
 
-function rollingCol(rolling, pKey, aKey) {
-  return `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin-top:6px;">
+function rollingStack(rolling, pKey, aKey) {
+  return `<div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start;gap:3px;padding-top:2px;">
     ${rolling.map(r => `
-      <div style="display:flex;align-items:center;gap:3px;">
+      <div style="display:flex;align-items:center;gap:2px;">
         <span style="font-size:10px;color:var(--text3);min-width:20px;text-align:right;">${r.n}d</span>
         ${badge(r[pKey], r[aKey])}
       </div>`).join('')}
@@ -191,22 +191,32 @@ function renderSKUTable(filteredData, fullData) {
             </div>
           </div>
         </td>
-        <td style="text-align:right;vertical-align:top;">
-          <div style="${VAL}color:var(--text);">${fmtExact(s.rev)}</div>
-          ${rollingCol(s.rolling, 'revP', 'revA')}
+        <td style="vertical-align:top;">
+          <div style="display:flex;align-items:flex-start;justify-content:flex-end;gap:8px;">
+            ${rollingStack(s.rolling, 'revP', 'revA')}
+            <div style="${VAL}color:var(--text);min-width:80px;text-align:right;">${fmtExact(s.rev)}</div>
+          </div>
         </td>
-        <td style="text-align:right;vertical-align:top;">
-          <div style="${VAL}color:${s.profit < 0 ? '#ef4444' : '#10b981'};">${fmtExact(s.profit)}</div>
-          ${rollingCol(s.rolling, 'profP', 'profA')}
+        <td style="vertical-align:top;">
+          <div style="display:flex;align-items:flex-start;justify-content:flex-end;gap:8px;">
+            ${rollingStack(s.rolling, 'profP', 'profA')}
+            <div style="${VAL}color:${s.profit < 0 ? '#ef4444' : '#10b981'};min-width:80px;text-align:right;">${fmtExact(s.profit)}</div>
+          </div>
         </td>
-        <td style="text-align:right;vertical-align:top;">
-          <div style="${VAL}color:var(--text);">${fmtExact(s.orders, 'int')}</div>
-          ${rollingCol(s.rolling, 'ordP', 'ordA')}
+        <td style="vertical-align:top;">
+          <div style="display:flex;align-items:flex-start;justify-content:flex-end;gap:8px;">
+            ${rollingStack(s.rolling, 'ordP', 'ordA')}
+            <div style="${VAL}color:var(--text);min-width:60px;text-align:right;">${fmtExact(s.orders, 'int')}</div>
+          </div>
         </td>
-        <td style="text-align:right;vertical-align:top;">
-          <div style="${VAL}color:${s.marginAmt < 0 ? '#ef4444' : 'var(--text)'};">${fmtExact(s.marginAmt)}</div>
-          ${s.mPct !== null ? `<div style="font-size:12px;color:var(--text3);margin-top:2px;">${fmt(s.mPct, 'pct')}</div>` : ''}
-          ${rollingCol(s.rolling, 'margP', 'margA')}
+        <td style="vertical-align:top;">
+          <div style="display:flex;align-items:flex-start;justify-content:flex-end;gap:8px;">
+            ${rollingStack(s.rolling, 'margP', 'margA')}
+            <div style="text-align:right;min-width:80px;">
+              <div style="${VAL}color:${s.marginAmt < 0 ? '#ef4444' : 'var(--text)'};">${fmtExact(s.marginAmt)}</div>
+              ${s.mPct !== null ? `<div style="font-size:12px;color:var(--text3);margin-top:1px;">${fmt(s.mPct, 'pct')}</div>` : ''}
+            </div>
+          </div>
         </td>
         ${retCell}
       </tr>`;

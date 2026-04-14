@@ -97,7 +97,7 @@ function renderKPIs(data, mode) {
     <div class="kpi-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
         <div style="width:36px;height:36px;border-radius:9px;background:${c.color};display:flex;align-items:center;justify-content:center;">${c.icon}</div>
-        <span style="font-size:13px;font-weight:700;color:var(--text2);letter-spacing:.03em;">${c.label}</span>
+        <span style="font-size:22px;font-weight:800;color:var(--text2);letter-spacing:.01em;">${c.label}</span>
       </div>
       <div style="font-size:38px;font-weight:800;color:var(--text);line-height:1;margin-bottom:${c.isMargin ? '6px' : '10px'};">${c.val}</div>
       ${c.isMargin ? `<div style="font-size:18px;font-weight:600;color:var(--text2);margin-bottom:8px;">${c.val2}</div>` : ''}
