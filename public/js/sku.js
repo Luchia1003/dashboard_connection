@@ -24,6 +24,14 @@ function skuLastN(rows, n) {
   return rows.filter(r => { const t = new Date(r.DATE).getTime(); return t <= ms && t > ms - n * 86400000; });
 }
 
+// Previous N days starting offset days before the latest date (mirrors daily.js prevN)
+function skuPrevN(rows, n, offset) {
+  if (!rows.length) return [];
+  const last = rows.reduce((m, r) => r.DATE > m ? r.DATE : m, '');
+  const end = new Date(last).getTime() - offset * 86400000;
+  return rows.filter(r => { const t = new Date(r.DATE).getTime(); return t <= end && t > end - n * 86400000; });
+}
+
 // ── Compute per-SKU metrics ───────────────────────────────────────────────────
 
 function computeSku(filteredRows, fullRows, f) {
@@ -50,31 +58,29 @@ function computeSku(filteredRows, fullRows, f) {
     else if (rr30 > 0.10)                     retAlert = 'warn';
   }
 
-  // Rolling (7/14/30d) — always full rows
-  // badge: daily avg vs full-period daily avg; sort: period total
-  const fd      = fullRows.length || 1;
-  const baseRev  = sum(fullRows, 'NET_GROSS_SALES') / fd;
-  const baseProf = sum(fullRows, 'NET_PROFIT')      / fd;
-  const baseOrd  = sum(fullRows, 'NET_QUANTITY')    / fd;
-  const baseMarg = sum(fullRows, 'NET_MARGIN')      / fd;
+  // Rolling — mirrors Time Comparisons baseline logic:
+  //   7d  vs prev 30d avg  (30 days before the last 7 days)
+  //   14d vs prev 30d avg  (30 days before the last 14 days)
+  //   30d vs prev 60d avg  (60 days before the last 30 days)
+  const WINDOWS = [
+    { n: 7,  baseN: 30, offset: 7  },
+    { n: 14, baseN: 30, offset: 14 },
+    { n: 30, baseN: 60, offset: 30 },
+  ];
 
-  const rolling = [7, 14, 30].map(n => {
-    const p  = skuLastN(fullRows, n);
-    const pd = p.length || 1;
+  function davg(rows, f) { return rows.length ? sum(rows, f) / rows.length : 0; }
+
+  const rolling = WINDOWS.map(({ n, baseN, offset }) => {
+    const cur  = skuLastN(fullRows, n);
+    const base = skuPrevN(fullRows, baseN, offset);
     return {
       n,
-      // Daily averages → used for % badges
-      revP:  sum(p, 'NET_GROSS_SALES') / pd,  revA:  baseRev,
-      profP: sum(p, 'NET_PROFIT')      / pd,  profA: baseProf,
-      ordP:  sum(p, 'NET_QUANTITY')    / pd,  ordA:  baseOrd,
-      margP: sum(p, 'NET_MARGIN')      / pd,  margA: baseMarg,
-      // Period totals → used for absolute-value sort
-      revTotal:  sum(p, 'NET_GROSS_SALES'),
-      profTotal: sum(p, 'NET_PROFIT'),
-      ordTotal:  sum(p, 'NET_QUANTITY'),
-      margTotal: sum(p, 'NET_MARGIN'),
-      rrP: p.length ? Math.abs(sum(p, 'REFUND_QUANTITY')) / (sum(p, 'ORDER_QUANTITY') || 1) : null,
-      rrA: rrAll,
+      revP:  davg(cur,  'NET_GROSS_SALES'), revA:  davg(base, 'NET_GROSS_SALES'),
+      profP: davg(cur,  'NET_PROFIT'),      profA: davg(base, 'NET_PROFIT'),
+      ordP:  davg(cur,  'NET_QUANTITY'),    ordA:  davg(base, 'NET_QUANTITY'),
+      margP: davg(cur,  'NET_MARGIN'),      margA: davg(base, 'NET_MARGIN'),
+      rrP:   cur.length  ? Math.abs(sum(cur,  'REFUND_QUANTITY')) / (sum(cur,  'ORDER_QUANTITY') || 1) : null,
+      rrA:   base.length ? Math.abs(sum(base, 'REFUND_QUANTITY')) / (sum(base, 'ORDER_QUANTITY') || 1) : null,
     };
   });
 

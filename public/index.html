@@ -302,12 +302,17 @@
             <option value="100">Top 100</option>
           </select>
         </div>
+        <!-- Methodology legend -->
+        <div style="margin-left:auto;font-size:10px;color:var(--text3);line-height:1.6;text-align:right;border-left:1px solid var(--border);padding-left:12px;">
+          <div><b style="color:var(--text2);">Rolling:</b> 7d &amp; 14d vs prev 30d avg · 30d vs prev 60d avg</div>
+          <div><b style="color:var(--text2);">Return Rate:</b> refund qty ÷ order qty (last 30d) · <span style="color:#ef4444;">⚠ Abnormal</span> = last30d &gt; hist×1.5 · <span style="color:#f59e0b;">High</span> = last30d &gt; 10%</div>
+        </div>
       </div>
 
       <div class="card" style="overflow:hidden;">
-        <div style="overflow-x:auto;min-height:calc(100vh - 240px);overflow-y:auto;">
+        <div style="overflow:auto;height:calc(100vh - 155px);">
           <table>
-            <thead>
+            <thead style="position:sticky;top:0;z-index:10;background:var(--card);">
               <tr>
                 <th style="text-align:left;min-width:220px;"># SKU / Product</th>
                 <th style="min-width:140px;">Revenue</th>
