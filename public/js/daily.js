@@ -101,7 +101,7 @@ function renderKPIs(data, mode) {
       </div>
       <div style="font-size:38px;font-weight:800;color:var(--text);line-height:1;margin-bottom:${c.isMargin ? '6px' : '10px'};">${c.val}</div>
       ${c.isMargin ? `<div style="font-size:18px;font-weight:600;color:var(--text2);margin-bottom:8px;">${c.val2}</div>` : ''}
-      <div style="font-size:14px;font-weight:500;color:var(--text2);">${c.sub}</div>
+      <div style="font-size:19px;font-weight:600;color:var(--text2);">${c.sub}</div>
     </div>
   `).join('');
 }

@@ -15,7 +15,7 @@ function fields(mode) {
   }[mode] || {};
 }
 
-// ── Rolling helpers (always use full SKU rows, not filtered) ──────────────────
+// ── Rolling helpers (always full SKU rows) ────────────────────────────────────
 
 function skuLastN(rows, n) {
   if (!rows.length) return [];
@@ -36,8 +36,7 @@ function computeSku(filteredRows, fullRows, f) {
   if (f.mPct) {
     mPct = avg(filteredRows, f.mPct);
   } else {
-    const r = sum(filteredRows, f.rev);
-    mPct = r !== 0 ? profit / r : null;
+    mPct = rev !== 0 ? profit / rev : null;
   }
 
   // Return rate: always based on full rows
@@ -51,9 +50,9 @@ function computeSku(filteredRows, fullRows, f) {
     else if (rr30 > 0.10)                     retAlert = 'warn';
   }
 
-  // Rolling (7/14/30d daily avg vs full-period daily avg) — always full rows
-  const fd = fullRows.length || 1;
-  // Full-period daily averages (baseline for badge comparison)
+  // Rolling (7/14/30d) — always full rows
+  // badge: daily avg vs full-period daily avg; sort: period total
+  const fd      = fullRows.length || 1;
   const baseRev  = sum(fullRows, 'NET_GROSS_SALES') / fd;
   const baseProf = sum(fullRows, 'NET_PROFIT')      / fd;
   const baseOrd  = sum(fullRows, 'NET_QUANTITY')    / fd;
@@ -64,12 +63,18 @@ function computeSku(filteredRows, fullRows, f) {
     const pd = p.length || 1;
     return {
       n,
+      // Daily averages → used for % badges
       revP:  sum(p, 'NET_GROSS_SALES') / pd,  revA:  baseRev,
       profP: sum(p, 'NET_PROFIT')      / pd,  profA: baseProf,
       ordP:  sum(p, 'NET_QUANTITY')    / pd,  ordA:  baseOrd,
       margP: sum(p, 'NET_MARGIN')      / pd,  margA: baseMarg,
-      rrP:   p.length ? Math.abs(sum(p, 'REFUND_QUANTITY')) / (sum(p, 'ORDER_QUANTITY') || 1) : null,
-      rrA:   rrAll,
+      // Period totals → used for absolute-value sort
+      revTotal:  sum(p, 'NET_GROSS_SALES'),
+      profTotal: sum(p, 'NET_PROFIT'),
+      ordTotal:  sum(p, 'NET_QUANTITY'),
+      margTotal: sum(p, 'NET_MARGIN'),
+      rrP: p.length ? Math.abs(sum(p, 'REFUND_QUANTITY')) / (sum(p, 'ORDER_QUANTITY') || 1) : null,
+      rrA: rrAll,
     };
   });
 
@@ -81,21 +86,31 @@ function computeSku(filteredRows, fullRows, f) {
 function badge(cur, base) {
   if (base == null || base === 0)
     return `<span class="badge-neu" style="font-size:10px;padding:1px 5px;border-radius:20px;">—</span>`;
-  const d = (cur - base) / Math.abs(base);
+  const d   = (cur - base) / Math.abs(base);
   const cls = d >= 0 ? 'badge-up' : 'badge-down';
   return `<span class="${cls}" style="font-size:10px;padding:1px 5px;border-radius:20px;">${d >= 0 ? '↑' : '↓'}${Math.abs(d * 100).toFixed(0)}%</span>`;
 }
 
-// ── Inline rolling sub-row for a metric ──────────────────────────────────────
+// ── Vertical rolling badges for one metric ────────────────────────────────────
 
-function rollingRow(rolling, pKey, aKey) {
-  return `<div style="display:flex;justify-content:flex-end;align-items:center;gap:5px;margin-top:4px;flex-wrap:wrap;">
+function rollingCol(rolling, pKey, aKey) {
+  return `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin-top:6px;">
     ${rolling.map(r => `
-      <span style="display:inline-flex;align-items:center;gap:2px;">
-        <span style="font-size:10px;color:var(--text3);">${r.n}d</span>
+      <div style="display:flex;align-items:center;gap:3px;">
+        <span style="font-size:10px;color:var(--text3);min-width:20px;text-align:right;">${r.n}d</span>
         ${badge(r[pKey], r[aKey])}
-      </span>`).join('')}
+      </div>`).join('')}
   </div>`;
+}
+
+// ── Exact-number formatter (no K/M) ──────────────────────────────────────────
+
+function fmtExact(v, type) {
+  if (v == null || isNaN(v)) return '—';
+  if (type === 'int') return Math.round(v).toLocaleString('en-US');
+  const a = Math.abs(v), s = v < 0 ? '-' : '';
+  if (a >= 1) return s + '$' + Math.round(a).toLocaleString('en-US');
+  return s + '$' + a.toFixed(2);
 }
 
 // ── Render Table ──────────────────────────────────────────────────────────────
@@ -115,7 +130,7 @@ function renderSKUTable(filteredData, fullData) {
     fMap[k].rows.push(r);
   });
 
-  // Group full rows by SKU (for rolling)
+  // Group full rows by SKU
   const fullMap = {};
   fullData.forEach(r => {
     const k = r.SALES_SKU || 'UNKNOWN';
@@ -123,22 +138,20 @@ function renderSKUTable(filteredData, fullData) {
     fullMap[k].push(r);
   });
 
-  // Compute per-SKU
   const skus = Object.values(fMap).map(({ sku, desc, rows }) => ({
-    sku, desc,
-    ...computeSku(rows, fullMap[sku] || [], f),
+    sku, desc, ...computeSku(rows, fullMap[sku] || [], f),
   }));
 
-  // Sort: metric × period × direction
+  // Sort: use PERIOD TOTALS for rolling (absolute value), not daily avg
   function getSortVal(s) {
     if (period === 'total') {
-      return { revenue: s.rev, profit: s.profit, orders: s.orders, margin: s.marginAmt, returnRate: s.rr30 || 0 }[metric] || 0;
+      return { revenue: s.rev, profit: s.profit, orders: s.orders, margin: s.marginAmt, returnRate: s.rr30 || 0 }[metric] ?? 0;
     }
-    const n  = parseInt(period);
-    const ri = n === 7 ? 0 : n === 14 ? 1 : 2;
-    const r  = s.rolling[ri] || s.rolling[0];
-    const pKeys = { revenue: 'revP', profit: 'profP', orders: 'ordP', margin: 'margP', returnRate: 'rrP' };
-    return r[pKeys[metric]] || 0;
+    const n    = parseInt(period);
+    const ri   = n === 7 ? 0 : n === 14 ? 1 : 2;
+    const r    = s.rolling[ri] || s.rolling[0];
+    const tKey = { revenue: 'revTotal', profit: 'profTotal', orders: 'ordTotal', margin: 'margTotal', returnRate: 'rrP' }[metric];
+    return r[tKey] ?? 0;
   }
   skus.sort((a, b) => {
     const diff = getSortVal(b) - getSortVal(a);
@@ -147,7 +160,6 @@ function renderSKUTable(filteredData, fullData) {
 
   const visible = skus.slice(0, topN);
 
-  // Header visibility
   document.getElementById('returnHeader').style.display = f.showRet ? '' : 'none';
 
   const tbody = document.getElementById('skuBody');
@@ -156,43 +168,45 @@ function renderSKUTable(filteredData, fullData) {
     return;
   }
 
+  const VAL = 'font-size:16px;font-weight:700;';
+
   tbody.innerHTML = visible.map((s, i) => {
     const retCell = f.showRet ? `
-      <td style="text-align:right;">
-        <div style="font-weight:500;color:${s.retAlert === 'danger' ? '#ef4444' : s.retAlert === 'warn' ? '#f59e0b' : 'var(--text)'};">
+      <td style="text-align:right;vertical-align:top;">
+        <div style="${VAL}color:${s.retAlert === 'danger' ? '#ef4444' : s.retAlert === 'warn' ? '#f59e0b' : 'var(--text)'};">
           ${s.rr30 !== null ? fmt(s.rr30, 'pct') : '—'}
         </div>
-        ${s.retAlert === 'danger' ? `<div style="margin-top:3px;"><span class="badge-down" style="font-size:9px;padding:1px 5px;border-radius:10px;">⚠ Abnormal</span></div>` : ''}
-        ${s.retAlert === 'warn'   ? `<div style="margin-top:3px;"><span class="badge-surge" style="font-size:9px;padding:1px 5px;border-radius:10px;">High</span></div>` : ''}
+        ${s.retAlert === 'danger' ? `<div style="margin-top:4px;"><span class="badge-down" style="font-size:9px;padding:1px 5px;border-radius:10px;">⚠ Abnormal</span></div>` : ''}
+        ${s.retAlert === 'warn'   ? `<div style="margin-top:4px;"><span class="badge-surge" style="font-size:9px;padding:1px 5px;border-radius:10px;">High</span></div>` : ''}
       </td>` : '<td></td>';
 
     return `
       <tr>
-        <td style="text-align:left;">
+        <td style="text-align:left;vertical-align:top;">
           <div style="display:flex;align-items:flex-start;gap:8px;">
-            <span style="font-size:11px;color:var(--text3);min-width:18px;padding-top:2px;">${i + 1}</span>
+            <span style="font-size:11px;color:var(--text3);min-width:18px;padding-top:3px;">${i + 1}</span>
             <div>
-              <div style="font-weight:600;color:var(--text);font-size:13px;">${s.sku}</div>
+              <div style="font-weight:700;color:var(--text);font-size:14px;">${s.sku}</div>
               ${s.desc ? `<div style="font-size:11px;color:var(--text3);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.desc}">${s.desc}</div>` : ''}
             </div>
           </div>
         </td>
-        <td style="text-align:right;">
-          <div style="font-weight:600;color:var(--text);">${fmt(s.rev)}</div>
-          ${rollingRow(s.rolling, 'revP', 'revA')}
+        <td style="text-align:right;vertical-align:top;">
+          <div style="${VAL}color:var(--text);">${fmtExact(s.rev)}</div>
+          ${rollingCol(s.rolling, 'revP', 'revA')}
         </td>
-        <td style="text-align:right;">
-          <div style="font-weight:500;color:${s.profit < 0 ? '#ef4444' : '#10b981'};">${fmt(s.profit)}</div>
-          ${rollingRow(s.rolling, 'profP', 'profA')}
+        <td style="text-align:right;vertical-align:top;">
+          <div style="${VAL}color:${s.profit < 0 ? '#ef4444' : '#10b981'};">${fmtExact(s.profit)}</div>
+          ${rollingCol(s.rolling, 'profP', 'profA')}
         </td>
-        <td style="text-align:right;">
-          <div style="color:var(--text);">${fmt(s.orders, 'int')}</div>
-          ${rollingRow(s.rolling, 'ordP', 'ordA')}
+        <td style="text-align:right;vertical-align:top;">
+          <div style="${VAL}color:var(--text);">${fmtExact(s.orders, 'int')}</div>
+          ${rollingCol(s.rolling, 'ordP', 'ordA')}
         </td>
-        <td style="text-align:right;">
-          <div style="font-weight:500;color:${s.marginAmt < 0 ? '#ef4444' : 'var(--text)'};">${fmt(s.marginAmt)}</div>
-          ${s.mPct !== null ? `<div style="font-size:11px;color:var(--text3);">${fmt(s.mPct, 'pct')}</div>` : ''}
-          ${rollingRow(s.rolling, 'margP', 'margA')}
+        <td style="text-align:right;vertical-align:top;">
+          <div style="${VAL}color:${s.marginAmt < 0 ? '#ef4444' : 'var(--text)'};">${fmtExact(s.marginAmt)}</div>
+          ${s.mPct !== null ? `<div style="font-size:12px;color:var(--text3);margin-top:2px;">${fmt(s.mPct, 'pct')}</div>` : ''}
+          ${rollingCol(s.rolling, 'margP', 'margA')}
         </td>
         ${retCell}
       </tr>`;
