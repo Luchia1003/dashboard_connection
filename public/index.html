@@ -210,6 +210,16 @@
 
     <!-- Sales Section -->
     <section id="salesSection">
+      <!-- Sales mode toggle -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+        <div class="toggle-group" id="salesToggle">
+          <button class="toggle-btn active" onclick="setSalesMode('net',this)">Net</button>
+          <button class="toggle-btn" onclick="setSalesMode('order',this)">Order</button>
+          <button class="toggle-btn" onclick="setSalesMode('refund',this)">Refund</button>
+        </div>
+        <span style="font-size:12px;color:var(--text3);">Data view · affects KPI cards and charts</span>
+      </div>
+
       <div id="kpiSection" class="kpi-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
         <div class="skeleton" style="height:120px;"></div>
         <div class="skeleton" style="height:120px;"></div>
@@ -244,6 +254,30 @@
             <canvas id="financialChart"></canvas>
             <div id="skelChart2" class="skeleton" style="position:absolute;inset:0;"></div>
           </div>
+        </div>
+      </div>
+
+      <!-- YoY Comparison Chart -->
+      <div class="card" style="padding:20px;margin-bottom:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+          <div>
+            <h2 style="font-size:14px;font-weight:600;color:var(--text);">Year over Year</h2>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">Current period vs same period last year</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;color:var(--text3);">Metric:</span>
+            <select id="yoyMetricSel" class="ctrl-sel" onchange="setYoyMetric(this.value)">
+              <option value="revenue">Revenue</option>
+              <option value="orders">Orders</option>
+              <option value="profit">Profit</option>
+              <option value="productSales">Product Sales</option>
+              <option value="margin">Margin $</option>
+            </select>
+          </div>
+        </div>
+        <div style="position:relative;height:220px;">
+          <canvas id="yoyChart"></canvas>
+          <div id="skelYoy" class="skeleton" style="position:absolute;inset:0;"></div>
         </div>
       </div>
 
@@ -291,7 +325,7 @@
       </div>
 
       <div class="card" style="overflow:hidden;">
-        <div style="overflow-x:auto;max-height:620px;overflow-y:auto;">
+        <div style="overflow-x:auto;min-height:calc(100vh - 240px);overflow-y:auto;">
           <table>
             <thead>
               <tr>

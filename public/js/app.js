@@ -4,11 +4,13 @@ const S = {
   daily: null,
   sku: null,
   page: 'sales',
-  tr: 'all',       // time range key
+  tr: 'all',         // time range key
   customFrom: '',
   customTo: '',
   theme: localStorage.getItem('theme') || 'dark',
-  mode: 'net',     // net | order | refund
+  salesMode: 'net',  // net | order | refund  (Sales Overview)
+  mode: 'net',       // net | order | refund  (Product Detail)
+  yoyMetric: 'revenue',
   charts: {},
 };
 window.S = S;
@@ -182,15 +184,29 @@ function toggleTheme() {
 window.toggleTheme = toggleTheme;
 applyTheme(S.theme);
 
-// ── Metric Mode ───────────────────────────────────────────────────────────────
+// ── Metric Modes ──────────────────────────────────────────────────────────────
+
+function setSalesMode(mode, btn) {
+  S.salesMode = mode;
+  document.querySelectorAll('#salesToggle .toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (S.daily) renderSalesPage();
+}
+window.setSalesMode = setSalesMode;
 
 function setMode(mode, btn) {
   S.mode = mode;
-  document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#productsSection .toggle-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderProductsPage();
 }
 window.setMode = setMode;
+
+function setYoyMetric(metric) {
+  S.yoyMetric = metric;
+  if (S.daily) renderYoYChart(getDaily(), S.daily);
+}
+window.setYoyMetric = setYoyMetric;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
