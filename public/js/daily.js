@@ -194,7 +194,7 @@ function renderCharts(data, mode) {
 
   S.charts.c1 = new Chart(document.getElementById('orderTrendChart'), {
     type: 'bar',
-    data: { labels: displayLabels, datasets: [{ label: `${ml} Orders`, data: vals.map(v => v.orders || 0), backgroundColor: 'rgba(14,165,233,.7)', borderColor: '#0ea5e9', borderWidth: 1, borderRadius: 4 }] },
+    data: { labels: displayLabels, datasets: [{ label: `${ml} Quantity`, data: vals.map(v => v.orders || 0), backgroundColor: 'rgba(14,165,233,.7)', borderColor: '#0ea5e9', borderWidth: 1, borderRadius: 4 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
       interaction: { intersect: false, mode: 'index' },
