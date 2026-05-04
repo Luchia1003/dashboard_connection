@@ -107,26 +107,38 @@ function renderKPIs(data, mode) {
 
 // ── Time Comparisons (always full data, always NET) ───────────────────────────
 
-function lastN(data, n) {
-  const last = data[data.length - 1]?.DATE;
+// Returns the latest date in `data` that is at least 3 days before today,
+// skipping the 2 most-recent days (yesterday + day-before) due to data delay.
+function getComparisonAnchor(data) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() - 3);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const eligible = data.filter(r => r.DATE <= cutoffStr);
+  return eligible.length ? eligible[eligible.length - 1].DATE : data[data.length - 1]?.DATE || null;
+}
+
+function lastN(data, n, anchor) {
+  const last = anchor !== undefined ? anchor : data[data.length - 1]?.DATE;
   if (!last) return [];
   const ms = new Date(last).getTime();
   return data.filter(r => { const m = new Date(r.DATE).getTime(); return m <= ms && m > ms - n * 86400000; });
 }
 
-function prevN(data, n, offset) {
-  const last = data[data.length - 1]?.DATE;
+function prevN(data, n, offset, anchor) {
+  const last = anchor !== undefined ? anchor : data[data.length - 1]?.DATE;
   if (!last) return [];
   const end = new Date(last).getTime() - offset * 86400000;
   return data.filter(r => { const m = new Date(r.DATE).getTime(); return m <= end && m > end - n * 86400000; });
 }
 
 function renderTimeComparisons(full) {
+  const anchor = getComparisonAnchor(full);
+  const anchorDisp = anchor ? anchor.slice(5) : '—';
   const configs = [
-    { title: 'Yesterday',    sub: 'vs 7d Avg',  cur: lastN(full, 1),  base: prevN(full, 7, 1) },
-    { title: 'Last 7 Days',  sub: 'vs 30d Avg', cur: lastN(full, 7),  base: prevN(full, 30, 7) },
-    { title: 'Last 14 Days', sub: 'vs 30d Avg', cur: lastN(full, 14), base: prevN(full, 30, 14) },
-    { title: 'Last 30 Days', sub: 'vs 60d Avg', cur: lastN(full, 30), base: prevN(full, 60, 30) },
+    { title: 'Yesterday',    sub: `${anchorDisp} · vs 7d Avg`,          cur: lastN(full, 1,  anchor), base: prevN(full, 7,  1,  anchor) },
+    { title: 'Last 7 Days',  sub: `ending ${anchorDisp} · vs 30d Avg`,  cur: lastN(full, 7,  anchor), base: prevN(full, 30, 7,  anchor) },
+    { title: 'Last 14 Days', sub: `ending ${anchorDisp} · vs 30d Avg`,  cur: lastN(full, 14, anchor), base: prevN(full, 30, 14, anchor) },
+    { title: 'Last 30 Days', sub: `ending ${anchorDisp} · vs 60d Avg`,  cur: lastN(full, 30, anchor), base: prevN(full, 60, 30, anchor) },
   ];
 
   const metrics = [
@@ -353,9 +365,10 @@ window.renderYoYChart = renderYoYChart;
 // ── Advanced Insights (always full data, always NET) ──────────────────────────
 
 function renderInsights(full) {
-  const d7  = lastN(full, 7);
-  const d14 = lastN(full, 14);
-  const d30 = lastN(full, 30);
+  const anchor = getComparisonAnchor(full);
+  const d7  = lastN(full, 7,  anchor);
+  const d14 = lastN(full, 14, anchor);
+  const d30 = lastN(full, 30, anchor);
 
   const avg7Rev  = avg(d7,  'NET_GROSS_SALES');
   const avg30Rev = avg(d30, 'NET_GROSS_SALES');
