@@ -119,6 +119,16 @@ function fmtExact(v, type) {
   return s + '$' + a.toFixed(2);
 }
 
+// ── SKU Search clear helper ───────────────────────────────────────────────────
+
+function clearSkuSearch() {
+  const inp = document.getElementById('skuSearch');
+  if (inp) { inp.value = ''; }
+  document.getElementById('skuSearchClear').style.display = 'none';
+  renderProductsPage();
+}
+window.clearSkuSearch = clearSkuSearch;
+
 // ── Render Table ──────────────────────────────────────────────────────────────
 
 function renderSKUTable(filteredData, fullData) {
@@ -127,6 +137,11 @@ function renderSKUTable(filteredData, fullData) {
   const period = (document.getElementById('sortPeriod') || {}).value || 'total';
   const dir    = (document.getElementById('sortDir')    || {}).value || 'desc';
   const topN   = parseInt(document.getElementById('topSel').value);
+
+  const searchRaw = (document.getElementById('skuSearch') || {}).value || '';
+  const query = searchRaw.trim().toLowerCase();
+  const clearBtn = document.getElementById('skuSearchClear');
+  if (clearBtn) clearBtn.style.display = query ? '' : 'none';
 
   // Group filtered rows by SKU
   const fMap = {};
@@ -144,9 +159,16 @@ function renderSKUTable(filteredData, fullData) {
     fullMap[k].push(r);
   });
 
-  const skus = Object.values(fMap).map(({ sku, desc, rows }) => ({
+  let skus = Object.values(fMap).map(({ sku, desc, rows }) => ({
     sku, desc, ...computeSku(rows, fullMap[sku] || [], f),
   }));
+
+  if (query) {
+    skus = skus.filter(s =>
+      s.sku.toLowerCase().includes(query) ||
+      s.desc.toLowerCase().includes(query)
+    );
+  }
 
   // Sort: use PERIOD TOTALS for rolling (absolute value), not daily avg
   function getSortVal(s) {
@@ -167,13 +189,14 @@ function renderSKUTable(filteredData, fullData) {
     return dir === 'asc' ? -diff : diff;
   });
 
-  const visible = skus.slice(0, topN);
+  const visible = query ? skus : skus.slice(0, topN);
 
   document.getElementById('returnHeader').style.display = f.showRet ? '' : 'none';
 
   const tbody = document.getElementById('skuBody');
   if (!visible.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text3);">No data for selected period</td></tr>`;
+    const msg = query ? `No SKUs matching "${searchRaw}"` : 'No data for selected period';
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
 

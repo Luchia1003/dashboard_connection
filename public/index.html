@@ -302,6 +302,11 @@
             <option value="100">Top 100</option>
           </select>
         </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35"/></svg>
+          <input id="skuSearch" type="text" class="ctrl-inp" placeholder="Search SKU…" style="width:140px;" oninput="renderProductsPage()" />
+          <button id="skuSearchClear" onclick="clearSkuSearch()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px;" title="Clear">✕</button>
+        </div>
         <!-- Methodology legend -->
         <div style="margin-left:auto;font-size:10px;color:var(--text3);line-height:1.6;text-align:right;border-left:1px solid var(--border);padding-left:12px;">
           <div><b style="color:var(--text2);">Rolling:</b> 7d &amp; 14d vs prev 30d avg · 30d vs prev 60d avg</div>
