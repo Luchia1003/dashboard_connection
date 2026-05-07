@@ -348,6 +348,13 @@
           <button class="toggle-btn active" onclick="setCouponView('sku',this)">SKU Level</button>
           <button class="toggle-btn" onclick="setCouponView('order',this)">Order Level</button>
         </div>
+        <!-- Coupon-specific date filter (independent from topbar) -->
+        <div style="display:flex;align-items:center;gap:6px;">
+          <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <select id="couponDateSel" class="ctrl-sel" style="min-width:110px;" onchange="setCouponDate(this.value)">
+            <option value="">All Dates</option>
+          </select>
+        </div>
         <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
 
         <!-- SKU-level controls -->

@@ -6,6 +6,7 @@ const S = {
   couponSku: null,
   couponOrder: null,
   couponView: 'sku',
+  couponDate: '',
   page: 'sales',
   tr: 'all',
   customFrom: '',

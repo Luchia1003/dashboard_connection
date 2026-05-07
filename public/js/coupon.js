@@ -1,19 +1,38 @@
 // ── Coupon Order Page ─────────────────────────────────────────────────────────
 
-// Filter coupon data by the time-range selector using ORDER_DATE
+// Coupon uses its own date selector — independent of the global topbar filter.
 function getCouponSkuFiltered() {
   if (!S.couponSku) return [];
-  const r = computeRange(S.tr, S.customFrom, S.customTo);
-  if (!r) return S.couponSku;
-  return S.couponSku.filter(row => row.ORDER_DATE >= r.f && row.ORDER_DATE <= r.t);
+  if (!S.couponDate) return S.couponSku;
+  return S.couponSku.filter(row => String(row.ORDER_DATE).slice(0, 10) === S.couponDate);
 }
 
 function getCouponOrderFiltered() {
   if (!S.couponOrder) return [];
-  const r = computeRange(S.tr, S.customFrom, S.customTo);
-  if (!r) return S.couponOrder;
-  return S.couponOrder.filter(row => row.ORDER_DATE >= r.f && row.ORDER_DATE <= r.t);
+  if (!S.couponDate) return S.couponOrder;
+  return S.couponOrder.filter(row => String(row.ORDER_DATE).slice(0, 10) === S.couponDate);
 }
+
+// Populate the date dropdown from the 3 most-recent ORDER_DATEs in either table.
+function populateCouponDates() {
+  const allDates = new Set();
+  (S.couponSku   || []).forEach(r => r.ORDER_DATE && allDates.add(String(r.ORDER_DATE).slice(0, 10)));
+  (S.couponOrder || []).forEach(r => r.ORDER_DATE && allDates.add(String(r.ORDER_DATE).slice(0, 10)));
+  const sorted = [...allDates].sort().reverse().slice(0, 3);
+  const sel = document.getElementById('couponDateSel');
+  if (!sel) return;
+  sel.innerHTML = `<option value="">All Dates</option>` +
+    sorted.map(d => `<option value="${d}">${d}</option>`).join('');
+  // Restore previously selected date if still valid
+  if (S.couponDate && sorted.includes(S.couponDate)) sel.value = S.couponDate;
+  else { S.couponDate = ''; sel.value = ''; }
+}
+
+function setCouponDate(val) {
+  S.couponDate = val;
+  renderCouponPage();
+}
+window.setCouponDate = setCouponDate;
 
 // ── Load (lazy, first visit only) ────────────────────────────────────────────
 
@@ -42,6 +61,7 @@ async function loadCouponData() {
     S.couponSku   = await sr.json();
     S.couponOrder = await or_.json();
 
+    populateCouponDates();
     renderCouponPage();
   } catch (err) {
     document.getElementById('couponBody').innerHTML =
@@ -87,6 +107,7 @@ function renderCouponSkuTable() {
   // Set header
   document.getElementById('couponHead').innerHTML = `
     <tr>
+      <th style="text-align:right;min-width:40px;width:40px;">#</th>
       <th style="text-align:left;min-width:130px;">SKU</th>
       <th style="min-width:100px;">Order Date</th>
       <th style="min-width:90px;">Quantity</th>
@@ -127,13 +148,14 @@ function renderCouponSkuTable() {
   }
 
   const V = 'font-size:14px;font-weight:700;';
-  tbody.innerHTML = rows.map(r => {
+  tbody.innerHTML = rows.map((r, i) => {
     const margin    = Number(r.TOTAL_MARGIN)        || 0;
     const couponFee = Number(r.TOTAL_COUPON_FEE)    || 0;
     const newMargin = Number(r.TOTAL_NEW_MARGIN)    || 0;
     const profit    = Number(r.TOTAL_PROFIT)        || 0;
     return `
     <tr>
+      <td style="text-align:right;font-size:12px;color:var(--text3);">${i + 1}</td>
       <td style="text-align:left;font-weight:700;color:var(--text);font-size:14px;">${r.SKU || '—'}</td>
       <td style="text-align:right;font-size:12px;color:var(--text2);">${r.ORDER_DATE || '—'}</td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${Math.round(Number(r.TOTAL_QUANTITY) || 0).toLocaleString()}</span></td>
@@ -162,6 +184,7 @@ function renderCouponOrderTable() {
   // Set header
   document.getElementById('couponHead').innerHTML = `
     <tr>
+      <th style="text-align:right;min-width:40px;width:40px;">#</th>
       <th style="text-align:left;min-width:190px;">Order ID</th>
       <th style="text-align:left;min-width:130px;">SKU</th>
       <th style="text-align:left;min-width:130px;">Clean SKU</th>
@@ -206,11 +229,12 @@ function renderCouponOrderTable() {
   }
 
   const V = 'font-size:14px;font-weight:700;';
-  tbody.innerHTML = rows.map(r => {
+  tbody.innerHTML = rows.map((r, i) => {
     const newMargin = Number(r.NEW_MARGIN) || 0;
     const profit    = Number(r.PROFIT)     || 0;
     return `
     <tr>
+      <td style="text-align:right;font-size:12px;color:var(--text3);">${i + 1}</td>
       <td style="text-align:left;font-size:12px;color:var(--text2);font-family:monospace;">${r.ORDER_ID || '—'}</td>
       <td style="text-align:left;font-weight:700;font-size:13px;color:var(--text);">${r.SKU || '—'}</td>
       <td style="text-align:left;font-size:12px;color:var(--text2);">${r.CLEAN_SKU || '—'}</td>
