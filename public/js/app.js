@@ -161,6 +161,7 @@ function switchPage(page) {
   document.getElementById('navCoupon').classList.toggle('active',   page === 'coupon');
   const titles = { sales: 'Sales Dashboard', products: 'Product Detail', coupon: 'Coupon Order' };
   document.getElementById('pageTitle').textContent = titles[page] || 'Dashboard';
+  document.getElementById('trControls').style.display = page === 'coupon' ? 'none' : 'flex';
   closeSidebar();
   if (page === 'coupon') {
     loadCouponData();
