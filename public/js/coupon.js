@@ -187,7 +187,6 @@ function renderCouponOrderTable() {
       <th style="text-align:right;min-width:40px;width:40px;">#</th>
       <th style="text-align:left;min-width:190px;">Order ID</th>
       <th style="text-align:left;min-width:130px;">SKU</th>
-      <th style="text-align:left;min-width:130px;">Clean SKU</th>
       <th style="min-width:100px;">Order Date</th>
       <th style="min-width:80px;">Qty</th>
       <th style="min-width:120px;">Product Sales</th>
@@ -237,7 +236,6 @@ function renderCouponOrderTable() {
       <td style="text-align:right;font-size:12px;color:var(--text3);">${i + 1}</td>
       <td style="text-align:left;font-size:12px;color:var(--text2);font-family:monospace;">${r.ORDER_ID || '—'}</td>
       <td style="text-align:left;font-weight:700;font-size:13px;color:var(--text);">${r.SKU || '—'}</td>
-      <td style="text-align:left;font-size:12px;color:var(--text2);">${r.CLEAN_SKU || '—'}</td>
       <td style="text-align:right;font-size:12px;color:var(--text2);">${r.ORDER_DATE || '—'}</td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${Math.round(Number(r.QUANTITY) || 0).toLocaleString()}</span></td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmt(Number(r.PRODUCT_SALES) || 0)}</span></td>
