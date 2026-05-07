@@ -190,9 +190,11 @@ function renderCouponOrderTable() {
       <th style="min-width:100px;">Order Date</th>
       <th style="min-width:80px;">Qty</th>
       <th style="min-width:120px;">Product Sales</th>
+      <th style="min-width:120px;">Sales Margin</th>
       <th style="min-width:120px;">Coupon Fee</th>
       <th style="min-width:120px;">New Margin</th>
       <th style="min-width:120px;">Profit</th>
+      <th style="min-width:110px;">Unit Cost</th>
     </tr>`;
 
   let rows = [...data];
@@ -229,8 +231,9 @@ function renderCouponOrderTable() {
 
   const V = 'font-size:14px;font-weight:700;';
   tbody.innerHTML = rows.map((r, i) => {
-    const newMargin = Number(r.NEW_MARGIN) || 0;
-    const profit    = Number(r.PROFIT)     || 0;
+    const salesMargin = Number(r.SALES_MARGIN) || 0;
+    const newMargin   = Number(r.NEW_MARGIN)   || 0;
+    const profit      = Number(r.PROFIT)       || 0;
     return `
     <tr>
       <td style="text-align:right;font-size:12px;color:var(--text3);">${i + 1}</td>
@@ -239,9 +242,11 @@ function renderCouponOrderTable() {
       <td style="text-align:right;font-size:12px;color:var(--text2);">${r.ORDER_DATE || '—'}</td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${Math.round(Number(r.QUANTITY) || 0).toLocaleString()}</span></td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmt(Number(r.PRODUCT_SALES) || 0)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:${salesMargin < 0 ? '#ef4444' : 'var(--text)'};">${fmt(salesMargin)}</span></td>
       <td style="text-align:right;"><span style="${V}color:#f59e0b;">${fmt(Number(r.COUPON_FEE) || 0)}</span></td>
       <td style="text-align:right;"><span style="${V}color:${newMargin < 0 ? '#ef4444' : '#10b981'};">${fmt(newMargin)}</span></td>
       <td style="text-align:right;"><span style="${V}color:${profit < 0 ? '#ef4444' : '#10b981'};">${fmt(profit)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:var(--text2);">${fmt(Number(r.UNIT_COST) || 0)}</span></td>
     </tr>`;
   }).join('');
 }
