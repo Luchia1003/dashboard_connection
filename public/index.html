@@ -354,6 +354,8 @@
         <div id="couponSkuControls" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-size:12px;color:var(--text3);">Sort</span>
           <select id="couponSkuSort" class="ctrl-sel" onchange="renderCouponPage()">
+            <option value="order_date">Order Date</option>
+            <option value="sku">SKU</option>
             <option value="product_sales">Product Sales</option>
             <option value="profit">Profit</option>
             <option value="qty">Quantity</option>
@@ -362,14 +364,8 @@
             <option value="margin">Margin</option>
           </select>
           <select id="couponSkuDir" class="ctrl-sel" onchange="renderCouponPage()">
-            <option value="desc">High → Low</option>
-            <option value="asc">Low → High</option>
-          </select>
-          <select id="couponSkuTop" class="ctrl-sel" onchange="renderCouponPage()">
-            <option value="20">Top 20</option>
-            <option value="50">Top 50</option>
-            <option value="100">Top 100</option>
-            <option value="9999">All</option>
+            <option value="desc">Newest / High → Low</option>
+            <option value="asc">Oldest / Low → High</option>
           </select>
           <div style="display:flex;align-items:center;gap:5px;">
             <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35"/></svg>

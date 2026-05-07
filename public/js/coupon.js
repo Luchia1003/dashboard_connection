@@ -72,14 +72,14 @@ function renderCouponPage() {
 window.renderCouponPage = renderCouponPage;
 
 // ── SKU Level ─────────────────────────────────────────────────────────────────
+// Shows each raw row from DAILY_SKU_COUPON_PROFIT (one row per ORDER_DATE + SKU)
 
 function renderCouponSkuTable() {
-  const data     = getCouponSkuFiltered();
-  const sortBy   = (document.getElementById('couponSkuSort') || {}).value || 'product_sales';
-  const sortDir  = (document.getElementById('couponSkuDir')  || {}).value || 'desc';
-  const topN     = parseInt((document.getElementById('couponSkuTop') || {}).value || '20');
+  const data      = getCouponSkuFiltered();
+  const sortBy    = (document.getElementById('couponSkuSort') || {}).value || 'order_date';
+  const sortDir   = (document.getElementById('couponSkuDir')  || {}).value || 'desc';
   const searchRaw = (document.getElementById('couponSkuSearch') || {}).value || '';
-  const query    = searchRaw.trim().toLowerCase();
+  const query     = searchRaw.trim().toLowerCase();
 
   const clrBtn = document.getElementById('couponSkuSearchClear');
   if (clrBtn) clrBtn.style.display = query ? '' : 'none';
@@ -87,65 +87,64 @@ function renderCouponSkuTable() {
   // Set header
   document.getElementById('couponHead').innerHTML = `
     <tr>
-      <th style="text-align:left;min-width:200px;"># SKU</th>
+      <th style="text-align:left;min-width:130px;">SKU</th>
+      <th style="min-width:100px;">Order Date</th>
       <th style="min-width:90px;">Quantity</th>
       <th style="min-width:120px;">Product Sales</th>
       <th style="min-width:120px;">Margin</th>
       <th style="min-width:120px;">Coupon Fee</th>
       <th style="min-width:120px;">New Margin</th>
       <th style="min-width:120px;">Profit</th>
-      <th style="min-width:110px;">Avg Unit Cost</th>
+      <th style="min-width:110px;">Unit Cost</th>
     </tr>`;
 
-  // Aggregate by SKU
-  const map = {};
-  data.forEach(r => {
-    const k = r.SKU || 'UNKNOWN';
-    if (!map[k]) map[k] = { sku: k, qty: 0, sales: 0, margin: 0, couponFee: 0, newMargin: 0, profit: 0, costSum: 0, costCount: 0 };
-    const m = map[k];
-    m.qty       += Number(r.TOTAL_QUANTITY)      || 0;
-    m.sales     += Number(r.TOTAL_PRODUCT_SALES) || 0;
-    m.margin    += Number(r.TOTAL_MARGIN)        || 0;
-    m.couponFee += Number(r.TOTAL_COUPON_FEE)    || 0;
-    m.newMargin += Number(r.TOTAL_NEW_MARGIN)    || 0;
-    m.profit    += Number(r.TOTAL_PROFIT)        || 0;
-    m.costSum   += Number(r.UNIT_COST)           || 0;
-    m.costCount += 1;
+  let rows = [...data];
+
+  if (query) rows = rows.filter(r => (r.SKU || '').toLowerCase().includes(query));
+
+  const sortFn = {
+    order_date:    r => r.ORDER_DATE || '',
+    sku:           r => r.SKU || '',
+    qty:           r => Number(r.TOTAL_QUANTITY)      || 0,
+    product_sales: r => Number(r.TOTAL_PRODUCT_SALES) || 0,
+    coupon_fee:    r => Number(r.TOTAL_COUPON_FEE)    || 0,
+    new_margin:    r => Number(r.TOTAL_NEW_MARGIN)    || 0,
+    margin:        r => Number(r.TOTAL_MARGIN)        || 0,
+    profit:        r => Number(r.TOTAL_PROFIT)        || 0,
+  }[sortBy] || (r => r.ORDER_DATE || '');
+
+  rows.sort((a, b) => {
+    const va = sortFn(a), vb = sortFn(b);
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ?  1 : -1;
+    return 0;
   });
 
-  let rows = Object.values(map).map(m => ({ ...m, unitCost: m.costCount ? m.costSum / m.costCount : 0 }));
-
-  if (query) rows = rows.filter(r => r.sku.toLowerCase().includes(query));
-
-  const keyMap = { product_sales: 'sales', profit: 'profit', qty: 'qty', coupon_fee: 'couponFee', new_margin: 'newMargin', margin: 'margin' };
-  const sortKey = keyMap[sortBy] || 'sales';
-  rows.sort((a, b) => sortDir === 'asc' ? a[sortKey] - b[sortKey] : b[sortKey] - a[sortKey]);
-
-  const visible = query ? rows : rows.slice(0, topN);
-
   const tbody = document.getElementById('couponBody');
-  if (!visible.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text3);">${query ? `No SKUs matching "${searchRaw}"` : 'No data for selected period'}</td></tr>`;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text3);">${query ? `No SKUs matching "${searchRaw}"` : 'No data for selected period'}</td></tr>`;
     return;
   }
 
-  const V = 'font-size:15px;font-weight:700;';
-  tbody.innerHTML = visible.map((s, i) => `
+  const V = 'font-size:14px;font-weight:700;';
+  tbody.innerHTML = rows.map(r => {
+    const margin    = Number(r.TOTAL_MARGIN)        || 0;
+    const couponFee = Number(r.TOTAL_COUPON_FEE)    || 0;
+    const newMargin = Number(r.TOTAL_NEW_MARGIN)    || 0;
+    const profit    = Number(r.TOTAL_PROFIT)        || 0;
+    return `
     <tr>
-      <td style="text-align:left;vertical-align:middle;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:11px;color:var(--text3);min-width:20px;">${i + 1}</span>
-          <span style="font-weight:700;color:var(--text);font-size:14px;">${s.sku}</span>
-        </div>
-      </td>
-      <td style="text-align:right;"><span style="${V}color:var(--text);">${Math.round(s.qty).toLocaleString()}</span></td>
-      <td style="text-align:right;"><span style="${V}color:var(--text);">${fmt(s.sales)}</span></td>
-      <td style="text-align:right;"><span style="${V}color:${s.margin < 0 ? '#ef4444' : 'var(--text)'};">${fmt(s.margin)}</span></td>
-      <td style="text-align:right;"><span style="${V}color:#f59e0b;">${fmt(s.couponFee)}</span></td>
-      <td style="text-align:right;"><span style="${V}color:${s.newMargin < 0 ? '#ef4444' : '#10b981'};">${fmt(s.newMargin)}</span></td>
-      <td style="text-align:right;"><span style="${V}color:${s.profit < 0 ? '#ef4444' : '#10b981'};">${fmt(s.profit)}</span></td>
-      <td style="text-align:right;"><span style="${V}color:var(--text2);">${fmt(s.unitCost)}</span></td>
-    </tr>`).join('');
+      <td style="text-align:left;font-weight:700;color:var(--text);font-size:14px;">${r.SKU || '—'}</td>
+      <td style="text-align:right;font-size:12px;color:var(--text2);">${r.ORDER_DATE || '—'}</td>
+      <td style="text-align:right;"><span style="${V}color:var(--text);">${Math.round(Number(r.TOTAL_QUANTITY) || 0).toLocaleString()}</span></td>
+      <td style="text-align:right;"><span style="${V}color:var(--text);">${fmt(Number(r.TOTAL_PRODUCT_SALES) || 0)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:${margin < 0 ? '#ef4444' : 'var(--text)'};">${fmt(margin)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:#f59e0b;">${fmt(couponFee)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:${newMargin < 0 ? '#ef4444' : '#10b981'};">${fmt(newMargin)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:${profit < 0 ? '#ef4444' : '#10b981'};">${fmt(profit)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:var(--text2);">${fmt(Number(r.UNIT_COST) || 0)}</span></td>
+    </tr>`;
+  }).join('');
 }
 
 // ── Order Level ───────────────────────────────────────────────────────────────

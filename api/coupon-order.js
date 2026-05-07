@@ -35,11 +35,7 @@ module.exports = async function handler(req, res) {
     await new Promise((resolve, reject) => conn.connect(err => err ? reject(err) : resolve()));
     const rows = await new Promise((resolve, reject) => {
       conn.execute({
-        // Use only the latest RUN_DATE snapshot to avoid double-counting
-        sqlText: `
-          SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.DAILY_ORDER_COUPON_PROFIT
-          WHERE RUN_DATE = (SELECT MAX(RUN_DATE) FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.DAILY_ORDER_COUPON_PROFIT)
-          ORDER BY ORDER_DATE ASC`,
+        sqlText: `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.DAILY_ORDER_COUPON_PROFIT ORDER BY ORDER_DATE ASC`,
         complete: (err, stmt, rows) => err ? reject(err) : resolve(rows),
       });
     });
