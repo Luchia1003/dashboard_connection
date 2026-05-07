@@ -3,6 +3,9 @@
 const S = {
   daily: null,
   sku: null,
+  couponSku: null,
+  couponOrder: null,
+  couponView: 'sku',
   page: 'sales',
   tr: 'all',
   customFrom: '',
@@ -139,6 +142,7 @@ window.onCustomRange = onCustomRange;
 window.clearTR = clearTR;
 
 function rerender() {
+  if (S.page === 'coupon') { renderCouponPage(); return; }
   if (!S.daily || !S.sku) return;
   if (S.page === 'sales') renderSalesPage();
   else renderProductsPage();
@@ -148,13 +152,18 @@ function rerender() {
 
 function switchPage(page) {
   S.page = page;
-  document.getElementById('salesSection').style.display = page === 'sales' ? 'block' : 'none';
+  document.getElementById('salesSection').style.display    = page === 'sales'    ? 'block' : 'none';
   document.getElementById('productsSection').style.display = page === 'products' ? 'block' : 'none';
-  document.getElementById('navSales').classList.toggle('active', page === 'sales');
+  document.getElementById('couponSection').style.display   = page === 'coupon'   ? 'block' : 'none';
+  document.getElementById('navSales').classList.toggle('active',    page === 'sales');
   document.getElementById('navProducts').classList.toggle('active', page === 'products');
-  document.getElementById('pageTitle').textContent = page === 'sales' ? 'Sales Dashboard' : 'Product Detail';
+  document.getElementById('navCoupon').classList.toggle('active',   page === 'coupon');
+  const titles = { sales: 'Sales Dashboard', products: 'Product Detail', coupon: 'Coupon Order' };
+  document.getElementById('pageTitle').textContent = titles[page] || 'Dashboard';
   closeSidebar();
-  if (S.daily && S.sku) {
+  if (page === 'coupon') {
+    loadCouponData();
+  } else if (S.daily && S.sku) {
     if (page === 'sales') renderSalesPage();
     else renderProductsPage();
   }

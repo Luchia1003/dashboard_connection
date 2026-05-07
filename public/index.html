@@ -129,6 +129,10 @@
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
       Product Detail
     </div>
+    <div class="nav-item" id="navCoupon" onclick="switchPage('coupon')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M17 17h.01M9.586 9.586l4.828 4.828M3 12a9 9 0 1118 0 9 9 0 01-18 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9a1 1 0 100-2 1 1 0 000 2zm6 6a1 1 0 100-2 1 1 0 000 2z"/></svg>
+      Coupon Order
+    </div>
   </nav>
   <div style="padding:12px 16px;border-top:1px solid var(--border);">
     <div id="sidebarStatus" style="font-size:11px;color:var(--text3);">–</div>
@@ -335,11 +339,87 @@
       </div>
     </section>
 
+    <!-- Coupon Order Section -->
+    <section id="couponSection" style="display:none;">
+      <!-- Sticky controls -->
+      <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:57px;z-index:25;">
+        <!-- View toggle -->
+        <div class="toggle-group" id="couponToggle">
+          <button class="toggle-btn active" onclick="setCouponView('sku',this)">SKU Level</button>
+          <button class="toggle-btn" onclick="setCouponView('order',this)">Order Level</button>
+        </div>
+        <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
+
+        <!-- SKU-level controls -->
+        <div id="couponSkuControls" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:12px;color:var(--text3);">Sort</span>
+          <select id="couponSkuSort" class="ctrl-sel" onchange="renderCouponPage()">
+            <option value="product_sales">Product Sales</option>
+            <option value="profit">Profit</option>
+            <option value="qty">Quantity</option>
+            <option value="coupon_fee">Coupon Fee</option>
+            <option value="new_margin">New Margin</option>
+            <option value="margin">Margin</option>
+          </select>
+          <select id="couponSkuDir" class="ctrl-sel" onchange="renderCouponPage()">
+            <option value="desc">High → Low</option>
+            <option value="asc">Low → High</option>
+          </select>
+          <select id="couponSkuTop" class="ctrl-sel" onchange="renderCouponPage()">
+            <option value="20">Top 20</option>
+            <option value="50">Top 50</option>
+            <option value="100">Top 100</option>
+            <option value="9999">All</option>
+          </select>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35"/></svg>
+            <input id="couponSkuSearch" type="text" class="ctrl-inp" placeholder="Search SKU…" style="width:130px;" oninput="renderCouponPage()" />
+            <button id="couponSkuSearchClear" onclick="clearCouponSkuSearch()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px;" title="Clear">✕</button>
+          </div>
+        </div>
+
+        <!-- Order-level controls -->
+        <div id="couponOrdControls" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:12px;color:var(--text3);">Sort</span>
+          <select id="couponOrdSort" class="ctrl-sel" onchange="renderCouponPage()">
+            <option value="order_date">Order Date</option>
+            <option value="sales">Product Sales</option>
+            <option value="profit">Profit</option>
+            <option value="coupon_fee">Coupon Fee</option>
+            <option value="qty">Quantity</option>
+            <option value="sku">SKU</option>
+          </select>
+          <select id="couponOrdDir" class="ctrl-sel" onchange="renderCouponPage()">
+            <option value="desc">Newest / High → Low</option>
+            <option value="asc">Oldest / Low → High</option>
+          </select>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35"/></svg>
+            <input id="couponOrdSearch" type="text" class="ctrl-inp" placeholder="Search Order ID / SKU…" style="width:180px;" oninput="renderCouponPage()" />
+            <button id="couponOrdSearchClear" onclick="clearCouponOrdSearch()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px;" title="Clear">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="card" style="overflow:hidden;">
+        <div style="overflow:auto;height:calc(100vh - 155px);">
+          <table>
+            <thead id="couponHead" style="position:sticky;top:0;z-index:10;background:var(--card);"></thead>
+            <tbody id="couponBody">
+              <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text3);">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
   </div>
 </main>
 
 <script src="js/app.js"></script>
 <script src="js/daily.js"></script>
 <script src="js/sku.js"></script>
+<script src="js/coupon.js"></script>
 </body>
 </html>
