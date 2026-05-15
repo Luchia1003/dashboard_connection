@@ -1,0 +1,155 @@
+// ── Order Detail Page ─────────────────────────────────────────────────────────
+// Shows the last 5 calendar days (today-5 … today-1) from ORDER_LEVEL_PROFIT.
+
+// Compute the allowed 5-day window: [today-5, today-1]
+function getOrderDetailWindow() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const to   = new Date(today); to.setDate(to.getDate() - 1);
+  const from = new Date(today); from.setDate(from.getDate() - 5);
+  return {
+    from: from.toISOString().slice(0, 10),
+    to:   to.toISOString().slice(0, 10),
+  };
+}
+
+// Filter to the 5-day window, then optionally to a single selected date
+function getOrderDetailFiltered() {
+  if (!S.orderDetail) return [];
+  const { from, to } = getOrderDetailWindow();
+  let rows = S.orderDetail.filter(r => {
+    const d = String(r.ORDER_DATE).slice(0, 10);
+    return d >= from && d <= to;
+  });
+  if (S.orderDetailDate) {
+    rows = rows.filter(r => String(r.ORDER_DATE).slice(0, 10) === S.orderDetailDate);
+  }
+  return rows;
+}
+
+// Populate the date dropdown with up to 5 dates present in the window
+function populateOrderDetailDates() {
+  const { from, to } = getOrderDetailWindow();
+  const dates = new Set();
+  (S.orderDetail || []).forEach(r => {
+    const d = String(r.ORDER_DATE).slice(0, 10);
+    if (d >= from && d <= to) dates.add(d);
+  });
+  const sorted = [...dates].sort().reverse(); // newest first
+  const sel = document.getElementById('orderDetailDateSel');
+  if (!sel) return;
+  sel.innerHTML = `<option value="">All Dates</option>` +
+    sorted.map(d => `<option value="${d}">${d}</option>`).join('');
+  if (S.orderDetailDate && sorted.includes(S.orderDetailDate)) {
+    sel.value = S.orderDetailDate;
+  } else {
+    S.orderDetailDate = ''; sel.value = '';
+  }
+}
+
+function setOrderDetailDate(val) {
+  S.orderDetailDate = val;
+  renderOrderDetailPage();
+}
+window.setOrderDetailDate = setOrderDetailDate;
+
+// ── Load (lazy) ───────────────────────────────────────────────────────────────
+
+async function loadOrderDetailData() {
+  if (S.orderDetail) { renderOrderDetailPage(); return; }
+
+  document.getElementById('orderDetailBody').innerHTML =
+    `<tr><td colspan="9" style="text-align:center;padding:48px;color:var(--text3);">
+       <div style="display:inline-block;width:28px;height:28px;border:2px solid var(--border);border-top-color:#0ea5e9;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px;"></div>
+       <div>Loading order data…</div>
+     </td></tr>`;
+
+  try {
+    const r = await fetch('/api/order-detail');
+    if (r.status === 401) { window.location.href = '/login.html'; return; }
+    if (!r.ok) throw new Error(`Order Detail API: HTTP ${r.status}`);
+    S.orderDetail = await r.json();
+    populateOrderDetailDates();
+    renderOrderDetailPage();
+  } catch (err) {
+    document.getElementById('orderDetailBody').innerHTML =
+      `<tr><td colspan="9" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
+  }
+}
+window.loadOrderDetailData = loadOrderDetailData;
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+function renderOrderDetailPage() {
+  if (!S.orderDetail) { loadOrderDetailData(); return; }
+
+  const sortBy    = (document.getElementById('orderDetailSort') || {}).value || 'order_date';
+  const sortDir   = (document.getElementById('orderDetailDir')  || {}).value || 'desc';
+  const searchRaw = (document.getElementById('orderDetailSearch') || {}).value || '';
+  const query     = searchRaw.trim().toLowerCase();
+
+  const clrBtn = document.getElementById('orderDetailSearchClear');
+  if (clrBtn) clrBtn.style.display = query ? '' : 'none';
+
+  let rows = getOrderDetailFiltered();
+
+  if (query) {
+    rows = rows.filter(r =>
+      (r.ORDER_ID || '').toLowerCase().includes(query) ||
+      (r.SKU      || '').toLowerCase().includes(query)
+    );
+  }
+
+  const sortFn = {
+    order_date:    r => String(r.ORDER_DATE    || ''),
+    sku:           r => String(r.SKU           || ''),
+    qty:           r => Number(r.QTY)           || 0,
+    product_sales: r => Number(r.PRODUCT_SALES) || 0,
+    sales_margin:  r => Number(r.SALES_MARGIN)  || 0,
+    unit_cost:     r => Number(r.UNIT_COST)     || 0,
+    profit:        r => Number(r.PROFIT)        || 0,
+  }[sortBy] || (r => String(r.ORDER_DATE || ''));
+
+  rows.sort((a, b) => {
+    const va = sortFn(a), vb = sortFn(b);
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ?  1 : -1;
+    return 0;
+  });
+
+  const tbody = document.getElementById('orderDetailBody');
+  if (!rows.length) {
+    const msg = query ? `No orders matching "${searchRaw}"` : 'No data for selected period';
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    return;
+  }
+
+  const V = 'font-size:14px;font-weight:700;';
+  tbody.innerHTML = rows.map((r, i) => {
+    const salesMargin = Number(r.SALES_MARGIN) || 0;
+    const profit      = Number(r.PROFIT)       || 0;
+    return `
+    <tr>
+      <td style="text-align:right;font-size:12px;color:var(--text3);">${i + 1}</td>
+      <td style="text-align:left;font-size:12px;color:var(--text2);font-family:monospace;">${r.ORDER_ID || '—'}</td>
+      <td style="text-align:left;font-weight:700;font-size:13px;color:var(--text);">${r.SKU || '—'}</td>
+      <td style="text-align:right;font-size:12px;color:var(--text2);">${String(r.ORDER_DATE || '—').slice(0, 10)}</td>
+      <td style="text-align:right;"><span style="${V}color:var(--text);">${Math.round(Number(r.QTY) || 0).toLocaleString()}</span></td>
+      <td style="text-align:right;"><span style="${V}color:var(--text);">${fmt(Number(r.PRODUCT_SALES) || 0)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:${salesMargin < 0 ? '#ef4444' : 'var(--text)'};">${fmt(salesMargin)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:var(--text2);">${fmt(Number(r.UNIT_COST) || 0)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:${profit < 0 ? '#ef4444' : '#10b981'};">${fmt(profit)}</span></td>
+    </tr>`;
+  }).join('');
+}
+window.renderOrderDetailPage = renderOrderDetailPage;
+
+// ── Search clear ──────────────────────────────────────────────────────────────
+
+function clearOrderDetailSearch() {
+  const inp = document.getElementById('orderDetailSearch');
+  if (inp) inp.value = '';
+  const btn = document.getElementById('orderDetailSearchClear');
+  if (btn) btn.style.display = 'none';
+  renderOrderDetailPage();
+}
+window.clearOrderDetailSearch = clearOrderDetailSearch;

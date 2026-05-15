@@ -3,6 +3,8 @@
 const S = {
   daily: null,
   sku: null,
+  orderDetail: null,
+  orderDetailDate: '',
   couponSku: null,
   couponOrder: null,
   couponView: 'sku',
@@ -143,7 +145,8 @@ window.onCustomRange = onCustomRange;
 window.clearTR = clearTR;
 
 function rerender() {
-  if (S.page === 'coupon') { renderCouponPage(); return; }
+  if (S.page === 'coupon')       { renderCouponPage();      return; }
+  if (S.page === 'orderDetail')  { renderOrderDetailPage(); return; }
   if (!S.daily || !S.sku) return;
   if (S.page === 'sales') renderSalesPage();
   else renderProductsPage();
@@ -153,18 +156,23 @@ function rerender() {
 
 function switchPage(page) {
   S.page = page;
-  document.getElementById('salesSection').style.display    = page === 'sales'    ? 'block' : 'none';
-  document.getElementById('productsSection').style.display = page === 'products' ? 'block' : 'none';
-  document.getElementById('couponSection').style.display   = page === 'coupon'   ? 'block' : 'none';
-  document.getElementById('navSales').classList.toggle('active',    page === 'sales');
-  document.getElementById('navProducts').classList.toggle('active', page === 'products');
-  document.getElementById('navCoupon').classList.toggle('active',   page === 'coupon');
-  const titles = { sales: 'Sales Dashboard', products: 'Product Detail', coupon: 'Coupon Order' };
+  document.getElementById('salesSection').style.display       = page === 'sales'       ? 'block' : 'none';
+  document.getElementById('productsSection').style.display    = page === 'products'    ? 'block' : 'none';
+  document.getElementById('orderDetailSection').style.display = page === 'orderDetail' ? 'block' : 'none';
+  document.getElementById('couponSection').style.display      = page === 'coupon'      ? 'block' : 'none';
+  document.getElementById('navSales').classList.toggle('active',       page === 'sales');
+  document.getElementById('navProducts').classList.toggle('active',    page === 'products');
+  document.getElementById('navOrderDetail').classList.toggle('active', page === 'orderDetail');
+  document.getElementById('navCoupon').classList.toggle('active',      page === 'coupon');
+  const titles = { sales: 'Sales Dashboard', products: 'Product Detail', orderDetail: 'Order Detail', coupon: 'Coupon Order' };
   document.getElementById('pageTitle').textContent = titles[page] || 'Dashboard';
-  document.getElementById('trControls').style.display = page === 'coupon' ? 'none' : 'flex';
+  const hideTopbar = page === 'coupon' || page === 'orderDetail';
+  document.getElementById('trControls').style.display = hideTopbar ? 'none' : 'flex';
   closeSidebar();
   if (page === 'coupon') {
     loadCouponData();
+  } else if (page === 'orderDetail') {
+    loadOrderDetailData();
   } else if (S.daily && S.sku) {
     if (page === 'sales') renderSalesPage();
     else renderProductsPage();
