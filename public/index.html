@@ -46,6 +46,19 @@
     }
     .toggle-btn.active { background: #0ea5e9; color: white; }
 
+    .platform-group {
+      display: inline-flex; background: var(--input); border: 1px solid var(--border);
+      border-radius: 10px; padding: 4px; gap: 3px;
+    }
+    .platform-btn {
+      padding: 8px 22px; border-radius: 7px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s; color: var(--text2); border: none; background: transparent;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .platform-btn:hover { color: var(--text); }
+    .platform-btn.active { background: #0ea5e9; color: white; box-shadow: 0 1px 2px rgba(14,165,233,.3); }
+    .platform-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+
     .ctrl-sel, .ctrl-inp {
       background: var(--input); border: 1px solid var(--border); color: var(--text);
       border-radius: 8px; padding: 5px 10px; font-size: 12px; outline: none; cursor: pointer;
@@ -192,6 +205,15 @@
 
     <!-- Sales Section -->
     <section id="salesSection">
+      <!-- Platform toggle -->
+      <div class="platform-row">
+        <div class="platform-group" id="salesPlatformToggle">
+          <button class="platform-btn active" data-platform="all"     onclick="setPlatform('all',this)">All</button>
+          <button class="platform-btn"        data-platform="amazon"  onclick="setPlatform('amazon',this)">Amazon</button>
+          <button class="platform-btn"        data-platform="shopify" onclick="setPlatform('shopify',this)">Shopify</button>
+        </div>
+        <span style="font-size:12px;color:var(--text3);">Platform · combines or filters all metrics below</span>
+      </div>
       <!-- Sales mode toggle -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
         <div class="toggle-group" id="salesToggle">
@@ -274,6 +296,15 @@
 
     <!-- Products Section -->
     <section id="productsSection" style="display:none;">
+      <!-- Platform toggle -->
+      <div class="platform-row">
+        <div class="platform-group" id="productsPlatformToggle">
+          <button class="platform-btn active" data-platform="all"     onclick="setPlatform('all',this)">All</button>
+          <button class="platform-btn"        data-platform="amazon"  onclick="setPlatform('amazon',this)">Amazon</button>
+          <button class="platform-btn"        data-platform="shopify" onclick="setPlatform('shopify',this)">Shopify</button>
+        </div>
+        <span style="font-size:12px;color:var(--text3);">Platform · filters SKU rows &amp; return rate</span>
+      </div>
       <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:57px;z-index:25;">
         <div class="toggle-group">
           <button class="toggle-btn active" onclick="setMode('net',this)">Net</button>
@@ -323,7 +354,7 @@
       </div>
 
       <div class="card" style="overflow:hidden;">
-        <div style="overflow:auto;height:calc(100vh - 155px);">
+        <div style="overflow:auto;height:calc(100vh - 215px);">
           <table>
             <thead style="position:sticky;top:0;z-index:10;background:var(--card);">
               <tr>
@@ -345,6 +376,15 @@
 
     <!-- Order Detail Section -->
     <section id="orderDetailSection" style="display:none;">
+      <!-- Platform toggle -->
+      <div class="platform-row">
+        <div class="platform-group" id="orderDetailPlatformToggle">
+          <button class="platform-btn active" data-platform="all"     onclick="setPlatform('all',this)">All</button>
+          <button class="platform-btn"        data-platform="amazon"  onclick="setPlatform('amazon',this)">Amazon</button>
+          <button class="platform-btn"        data-platform="shopify" onclick="setPlatform('shopify',this)">Shopify</button>
+        </div>
+        <span style="font-size:12px;color:var(--text3);">Platform · filters order-level rows</span>
+      </div>
       <!-- Sticky controls -->
       <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:57px;z-index:25;">
         <!-- Independent date filter (last 5 days) -->
@@ -384,13 +424,14 @@
 
       <!-- Table -->
       <div class="card" style="overflow:hidden;">
-        <div style="overflow:auto;height:calc(100vh - 155px);">
+        <div style="overflow:auto;height:calc(100vh - 215px);">
           <table>
             <thead style="position:sticky;top:0;z-index:10;background:var(--card);">
               <tr>
                 <th style="text-align:right;min-width:40px;width:40px;">#</th>
                 <th style="text-align:left;min-width:190px;">Order ID</th>
                 <th style="text-align:left;min-width:130px;">SKU</th>
+                <th style="min-width:90px;">Platform</th>
                 <th style="min-width:100px;">Order Date</th>
                 <th style="min-width:70px;">Qty</th>
                 <th style="min-width:120px;">Product Sales</th>
@@ -400,7 +441,7 @@
               </tr>
             </thead>
             <tbody id="orderDetailBody">
-              <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text3);">Loading…</td></tr>
+              <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3);">Loading…</td></tr>
             </tbody>
           </table>
         </div>

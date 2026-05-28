@@ -1,7 +1,7 @@
 // ── Products Page ─────────────────────────────────────────────────────────────
 
 function renderProductsPage() {
-  renderSKUTable(getSku(), S.sku);
+  renderSKUTable(getSku(), getSkuFull());
 }
 window.renderProductsPage = renderProductsPage;
 

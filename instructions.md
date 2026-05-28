@@ -281,3 +281,166 @@ ORDER_DAILY_METRICS 的所有字段之外，额外包含：
 - 30d `RETURN_RATE` > 10% → 警告标记
 - 30d `RETURN_RATE` > 该 SKU 全期 avg × 1.5 → 异常标记
 
+-----修改需求
+# Dashboard 修改需求
+
+## 0. 性能优化：数据共享，切换页面不重新加载
+
+- 页面初始化时同时请求 `/api/daily` 和 `/api/sku`，存入全局变量 `window.dailyData` 和 `window.skuData`
+- Sales Overview 和 Product Detail 切换时直接读内存数据，不重新 fetch
+- 顶部导航切换用 JS 控制 `display: none / block`，不跳转 HTML 页面
+- 全局加载状态：数据未就绪时显示 loading spinner，就绪后两页都可以切换
+
+---
+
+## 1. Time Range 筛选器
+
+### 规则
+- KPI 卡片、Trend Charts、Product Detail 表格受 Time Range 影响
+- Time Comparisons（Yesterday / 7d / 14d / 30d 对比区）**永远不受** Time Range 影响，始终基于今天往前算
+- Product Detail Rolling 列（7d / 14d / 30d）**永远不受** Time Range 影响，始终基于今天往前算
+- Net / Gross Sales / Refunds 切换按钮影响全页数据口径，与 Time Range 独立
+
+### 下拉菜单选项
+```
+All Time
+─────────────
+Today
+Yesterday
+─────────────
+This Week（本周一到今天）
+Last Week（上周一到上周日）
+─────────────
+This Month（当月 1 号到今天）
+Last Month（上个完整月）
+─────────────
+按月选择（展开子菜单或滚动列表，显示所有有数据的月份，格式 YYYY-MM，如 2025-03）
+─────────────
+Last 7 Days
+Last 14 Days
+Last 30 Days
+Last 90 Days
+─────────────
+This Year（今年 1 月 1 号到今天）
+Last Year（去年完整年）
+─────────────
+Custom Range（显示两个日期输入框 From / To）
+```
+
+---
+
+## 2. KPI 卡片优化
+
+- 数字字体加大到至少 32px，粗体，确保清晰可读
+- Margin 卡片同时展示两个值：
+  - 主数字：`NET_MARGIN_PCT`（百分比，如 24.5%）
+  - 副数字：`NET_MARGIN`（金额，如 $2.1M，灰色小字显示在百分比下方）
+
+---
+
+## 3. Product Detail 页优化
+
+### 表格新增 Margin 列
+完整列顺序：
+```
+# | SKU / Product Name | Revenue | Profit | Orders | Margin | Return Rate | Rolling
+```
+
+- Margin 金额：随 Net / Order / Refund toggle 分别对应 `NET_MARGIN` / `ORDER_MARGIN` / `REFUND_MARGIN`
+- Margin 百分比：`NET_MARGIN_PCT`，小字显示在金额下方
+
+### 排版
+- 表格占满页面全宽，每列均匀分配宽度
+- SKU / Product Name 列固定宽度较宽，其他列等宽
+
+### Sort By 选项扩展
+```
+Revenue           ← 现有
+Profit            ← 现有
+Orders            ← 现有
+Return Rate       ← 现有
+─────────────
+Rolling 7d Revenue     ← 新增
+Rolling 14d Revenue    ← 新增
+Rolling 30d Revenue    ← 新增
+Rolling 7d Profit      ← 新增
+Rolling 7d Return Rate ← 新增
+```
+
+---
+
+## 4. 响应式布局（手机适配）
+
+### 断点
+- 桌面：`>= 1024px`
+- 平板：`768px - 1023px`
+- 手机：`< 768px`
+
+### 手机版布局调整
+- KPI 卡片：4 列 → 2×2 网格
+- Time Comparisons：4 列横排 → 纵向堆叠
+- Trend Charts：左右并排 → 上下堆叠，图表高度适当缩小
+- Product Detail 表格：
+  - 隐藏 Rolling 列和 Margin 列
+  - 保留：SKU / Revenue / Profit / Orders / Return Rate
+  - 表格支持横向滚动
+- 导航侧边栏 → 顶部 hamburger menu，点击展开
+- 筛选器区域折叠为一行，点击展开
+
+---
+
+## 5. Google OAuth 登录
+
+### 实现方式
+- Google OAuth 2.0，Vercel Serverless Function 处理回调
+- 白名单邮箱存在环境变量 `ALLOWED_EMAILS`（逗号分隔）
+- 验证通过后签发 JWT token，存入 `httpOnly cookie`
+- 每个 `/api/*` endpoint 验证 cookie 中的 JWT，无效则返回 401
+- 前端检测到 401 自动跳转 `login.html`
+- 未登录用户重定向到登录页，登录后跳回原页面
+
+### 环境变量
+```
+GOOGLE_CLIENT_ID=从 Google Cloud Console 获取
+GOOGLE_CLIENT_SECRET=从 Google Cloud Console 获取
+ALLOWED_EMAILS=email1@gmail.com,email2@gmail.com
+JWT_SECRET=随机字符串（用于签发和验证 JWT）
+```
+
+### 新增文件结构
+```
+project/
+├── api/
+│   ├── auth/
+│   │   ├── google.js      # 发起 Google OAuth 跳转
+│   │   ├── callback.js    # 验证邮箱白名单，签发 JWT，写入 cookie
+│   │   └── logout.js      # 清除 cookie，跳转 login.html
+│   ├── middleware/
+│   │   └── auth.js        # JWT 验证中间件，所有 /api/daily /api/sku 复用
+│   ├── daily.js           # 引入 auth 中间件
+│   └── sku.js             # 引入 auth 中间件
+├── public/
+│   └── login.html         # 仅显示 Google 登录按钮
+```
+
+### Google Cloud Console 配置步骤
+1. 去 `console.cloud.google.com` 新建项目
+2. APIs & Services → OAuth consent screen → 填写应用名
+3. APIs & Services → Credentials → Create OAuth 2.0 Client ID → Web Application
+4. Authorized redirect URIs 填写：
+   - 本地：`http://localhost:3000/api/auth/callback`
+   - 生产：`https://你的vercel域名/api/auth/callback`
+5. 把 Client ID 和 Client Secret 填入 Vercel 环境变量
+
+---
+
+## 6. 浅色主题（Light Mode）
+
+- 新增浅色底色版本，与现有深色主题并存
+- 右上角加切换按钮（🌙 / ☀️），点击切换，偏好存入 `localStorage`
+- 浅色主题配色：
+  - 背景：`#F5F6FA`（页面底色），`#FFFFFF`（卡片底色）
+  - 文字：`#1A1A2E`（主色），`#6B7280`（次要色）
+  - 边框：`#E5E7EB`
+  - 强调色：保持与深色主题一致（蓝 / 绿 / 红）
+  - 图表线条颜色保持不变，背景改为白色

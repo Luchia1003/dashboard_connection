@@ -2,13 +2,13 @@
 
 function renderSalesPage() {
   const filtered = getDaily();
-  const full = S.daily;
+  const full = getDailyFull();    // platform-filtered, but not date-filtered
   const mode = S.salesMode || 'net';
   renderKPIs(filtered, mode);
-  renderTimeComparisons(full);    // always full data, always NET fields
+  renderTimeComparisons(full);    // always full date range, always NET fields, platform-filtered
   renderCharts(filtered, mode);
   renderYoYChart(filtered, full, mode);
-  renderInsights(full);           // always full data, always NET fields
+  renderInsights(full);           // always full date range, always NET fields, platform-filtered
 }
 window.renderSalesPage = renderSalesPage;
 
@@ -23,8 +23,13 @@ function salesF(mode) {
 }
 
 // ── Chart granularity ─────────────────────────────────────────────────────────
+// Count unique dates so multi-platform rows don't flip granularity prematurely.
 
-function gran(data) { return data.length <= 90 ? 'day' : 'month'; }
+function gran(data) {
+  const uniq = new Set();
+  data.forEach(r => uniq.add(r.DATE));
+  return uniq.size <= 90 ? 'day' : 'month';
+}
 
 function groupBy(data, g, field) {
   const map = {};

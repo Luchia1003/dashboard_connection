@@ -17,6 +17,7 @@ const S = {
   salesMode: 'net',
   mode: 'net',
   yoyMetric: 'revenue',
+  platform: localStorage.getItem('platform') || 'all',
   charts: {},
 };
 window.S = S;
@@ -80,9 +81,27 @@ function filterData(data, key, from, to) {
   return data.filter(row => row.DATE >= r.f && row.DATE <= r.t);
 }
 
-function getDaily() { return filterData(S.daily, S.tr, S.customFrom, S.customTo); }
-function getSku()   { return filterData(S.sku,   S.tr, S.customFrom, S.customTo); }
-window.getDaily = getDaily; window.getSku = getSku; window.filterData = filterData;
+// ── Platform filtering ────────────────────────────────────────────────────────
+
+function filterByPlatform(data) {
+  if (!data) return [];
+  const p = (S.platform || 'all').toLowerCase();
+  if (p === 'all') return data;
+  return data.filter(row => String(row.PLATFORM || '').toLowerCase() === p);
+}
+
+function getDailyFull() { return filterByPlatform(S.daily); }
+function getSkuFull()   { return filterByPlatform(S.sku); }
+
+function getDaily() { return filterData(getDailyFull(), S.tr, S.customFrom, S.customTo); }
+function getSku()   { return filterData(getSkuFull(),   S.tr, S.customFrom, S.customTo); }
+
+window.getDaily = getDaily;
+window.getSku = getSku;
+window.getDailyFull = getDailyFull;
+window.getSkuFull = getSkuFull;
+window.filterByPlatform = filterByPlatform;
+window.filterData = filterData;
 
 // ── Time Range — 3-box UI ─────────────────────────────────────────────────────
 
@@ -225,6 +244,23 @@ function setMode(mode, btn) {
 }
 window.setMode = setMode;
 
+// Keep all three platform toggle button-groups visually in sync
+function syncPlatformButtons() {
+  const p = (S.platform || 'all').toLowerCase();
+  document.querySelectorAll('.platform-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.platform === p);
+  });
+}
+
+function setPlatform(plat, btn) {
+  S.platform = plat;
+  localStorage.setItem('platform', plat);
+  syncPlatformButtons();
+  rerender();
+}
+window.setPlatform = setPlatform;
+window.syncPlatformButtons = syncPlatformButtons;
+
 function setYoyMetric(metric) {
   S.yoyMetric = metric;
   if (S.daily) renderYoYChart(getDaily(), S.daily, S.salesMode);
@@ -249,6 +285,7 @@ async function init() {
     document.getElementById('sidebarStatus').textContent = `Updated: ${lastDate || '–'}`;
 
     populateMonths(S.daily);
+    syncPlatformButtons();
 
     document.getElementById('loadingOverlay').style.display = 'none';
 
