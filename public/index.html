@@ -150,7 +150,10 @@
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M17 17h.01M9.586 9.586l4.828 4.828M3 12a9 9 0 1118 0 9 9 0 01-18 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9a1 1 0 100-2 1 1 0 000 2zm6 6a1 1 0 100-2 1 1 0 000 2z"/></svg>
       Coupon Order
     </div>
-    <div class="nav-item" id="navInventory" onclick="switchPage('inventory')">
+    <!-- Inventory page is temporarily hidden from the sidebar.
+         Code, API endpoints, and JS are intact — just remove `style="display:none"`
+         on this nav-item to bring it back. -->
+    <div class="nav-item" id="navInventory" onclick="switchPage('inventory')" style="display:none;">
       <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7H4M20 7v12a1 1 0 01-1 1H5a1 1 0 01-1-1V7M20 7l-2-3H6L4 7M9 11h6"/></svg>
       Inventory
     </div>
