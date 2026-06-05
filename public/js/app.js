@@ -9,6 +9,9 @@ const S = {
   couponOrder: null,
   couponView: 'sku',
   couponDate: '',
+  inventoryForecast: null,
+  fbaAging: null,
+  inventoryView: 'forecast',
   page: 'sales',
   tr: 'all',
   customFrom: '',
@@ -166,6 +169,7 @@ window.clearTR = clearTR;
 function rerender() {
   if (S.page === 'coupon')       { renderCouponPage();      return; }
   if (S.page === 'orderDetail')  { renderOrderDetailPage(); return; }
+  if (S.page === 'inventory')    { renderInventoryPage();   return; }
   if (!S.daily || !S.sku) return;
   if (S.page === 'sales') renderSalesPage();
   else renderProductsPage();
@@ -179,19 +183,30 @@ function switchPage(page) {
   document.getElementById('productsSection').style.display    = page === 'products'    ? 'block' : 'none';
   document.getElementById('orderDetailSection').style.display = page === 'orderDetail' ? 'block' : 'none';
   document.getElementById('couponSection').style.display      = page === 'coupon'      ? 'block' : 'none';
+  document.getElementById('inventorySection').style.display   = page === 'inventory'   ? 'block' : 'none';
   document.getElementById('navSales').classList.toggle('active',       page === 'sales');
   document.getElementById('navProducts').classList.toggle('active',    page === 'products');
   document.getElementById('navOrderDetail').classList.toggle('active', page === 'orderDetail');
   document.getElementById('navCoupon').classList.toggle('active',      page === 'coupon');
-  const titles = { sales: 'Sales Dashboard', products: 'Product Detail', orderDetail: 'Order Detail', coupon: 'Coupon Order' };
+  document.getElementById('navInventory').classList.toggle('active',   page === 'inventory');
+  const titles = {
+    sales: 'Sales Dashboard',
+    products: 'Product Detail',
+    orderDetail: 'Order Detail',
+    coupon: 'Coupon Order',
+    inventory: 'Inventory',
+  };
   document.getElementById('pageTitle').textContent = titles[page] || 'Dashboard';
-  const hideTopbar = page === 'coupon' || page === 'orderDetail';
+  // Inventory / Coupon / Order Detail have their own internal filters and don't use the global time range.
+  const hideTopbar = page === 'coupon' || page === 'orderDetail' || page === 'inventory';
   document.getElementById('trControls').style.display = hideTopbar ? 'none' : 'flex';
   closeSidebar();
   if (page === 'coupon') {
     loadCouponData();
   } else if (page === 'orderDetail') {
     loadOrderDetailData();
+  } else if (page === 'inventory') {
+    loadInventoryData();
   } else if (S.daily && S.sku) {
     if (page === 'sales') renderSalesPage();
     else renderProductsPage();
