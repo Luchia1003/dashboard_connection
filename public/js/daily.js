@@ -273,14 +273,22 @@ function shiftMonthKey(ym, yrs) {
 }
 
 // Pretty date formatter: "2026-06-07" → "Jun 7, 2026" (avoids Date() timezone issues)
-function ymdPretty(s) {
+function ymdPretty(s, includeYear = true) {
   if (!s) return '—';
   const [y, m, d] = String(s).slice(0, 10).split('-').map(Number);
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${months[m - 1]} ${d}, ${y}`;
+  return includeYear ? `${months[m - 1]} ${d}, ${y}` : `${months[m - 1]} ${d}`;
 }
 
-// Populate the totals strip above the YoY chart
+// Format a date range concisely; drop the year on the start if both ends are same year
+function ymdRange(from, to) {
+  if (!from || !to) return '—';
+  const fY = String(from).slice(0, 4), tY = String(to).slice(0, 4);
+  if (fY === tY) return `${ymdPretty(from, false)} – ${ymdPretty(to)}`;
+  return `${ymdPretty(from)} – ${ymdPretty(to)}`;
+}
+
+// Populate the inline totals next to the YoY title
 function renderYoYTotals({ filtered, lyData, field, metricLabel, isOrders, minDate, maxDate, lyMin, lyMax, curYear, lyYear }) {
   const el = document.getElementById('yoyTotals');
   if (!el) return;
@@ -290,8 +298,8 @@ function renderYoYTotals({ filtered, lyData, field, metricLabel, isOrders, minDa
     return;
   }
 
-  const curTotal = sum(filtered, field);
-  const lyTotal  = sum(lyData, field);
+  const curTotal  = sum(filtered, field);
+  const lyTotal   = sum(lyData,   field);
   const lyHasData = lyData.length > 0;
 
   const fmtVal = v => isOrders ? Math.round(v).toLocaleString() : fmt(v);
@@ -302,28 +310,20 @@ function renderYoYTotals({ filtered, lyData, field, metricLabel, isOrders, minDa
     const up    = d >= 0;
     const arrow = up ? '↑' : '↓';
     const cls   = up ? 'badge-up' : 'badge-down';
-    diffBadge = `<span class="${cls}" style="font-size:13px;padding:5px 11px;border-radius:20px;font-weight:700;white-space:nowrap;">${arrow} ${(Math.abs(d) * 100).toFixed(1)}% YoY</span>`;
+    diffBadge = `<span class="${cls}" style="font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700;white-space:nowrap;">${arrow} ${(Math.abs(d) * 100).toFixed(1)}% YoY</span>`;
   } else {
-    diffBadge = `<span class="badge-neu" style="font-size:13px;padding:5px 11px;border-radius:20px;font-weight:600;white-space:nowrap;">No LY data</span>`;
+    diffBadge = `<span class="badge-neu" style="font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;white-space:nowrap;">No LY data</span>`;
   }
 
-  const curRange = `${ymdPretty(minDate)} – ${ymdPretty(maxDate)}`;
-  const lyRange  = lyMin && lyMax ? `${ymdPretty(lyMin)} – ${ymdPretty(lyMax)}` : '—';
-
+  // Match the "Year over Year" heading style: 14px / weight 600
   el.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:2px;min-width:130px;">
-      <span style="font-size:10px;font-weight:700;color:#0ea5e9;text-transform:uppercase;letter-spacing:.06em;">${curYear} · Current</span>
-      <span style="font-size:22px;font-weight:800;color:var(--text);line-height:1.1;">${fmtVal(curTotal)}</span>
-      <span style="font-size:10px;color:var(--text3);">${curRange}</span>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px;font-weight:600;color:var(--text);">
+      <span><span style="color:#0ea5e9;">${curYear}</span> ${fmtVal(curTotal)}</span>
+      <span style="color:var(--text3);font-weight:400;">·</span>
+      <span style="color:var(--text2);"><span style="color:var(--text3);">${lyYear}</span> ${lyHasData ? fmtVal(lyTotal) : '—'}</span>
+      ${diffBadge}
     </div>
-    <div style="width:1px;height:42px;background:var(--border);"></div>
-    <div style="display:flex;flex-direction:column;gap:2px;min-width:130px;">
-      <span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;">${lyYear} · Last Year</span>
-      <span style="font-size:22px;font-weight:800;color:var(--text2);line-height:1.1;">${lyHasData ? fmtVal(lyTotal) : '—'}</span>
-      <span style="font-size:10px;color:var(--text3);">${lyRange}</span>
-    </div>
-    <div style="margin-left:4px;">${diffBadge}</div>
-    <div style="margin-left:auto;font-size:11px;color:var(--text3);text-align:right;">Total ${metricLabel} during the visible period</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:2px;">${ymdRange(minDate, maxDate)} · ${metricLabel}</div>
   `;
 }
 
