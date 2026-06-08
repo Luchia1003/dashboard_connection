@@ -272,6 +272,61 @@ function shiftMonthKey(ym, yrs) {
   return `${y + yrs}-${String(m).padStart(2, '0')}`;
 }
 
+// Pretty date formatter: "2026-06-07" → "Jun 7, 2026" (avoids Date() timezone issues)
+function ymdPretty(s) {
+  if (!s) return '—';
+  const [y, m, d] = String(s).slice(0, 10).split('-').map(Number);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[m - 1]} ${d}, ${y}`;
+}
+
+// Populate the totals strip above the YoY chart
+function renderYoYTotals({ filtered, lyData, field, metricLabel, isOrders, minDate, maxDate, lyMin, lyMax, curYear, lyYear }) {
+  const el = document.getElementById('yoyTotals');
+  if (!el) return;
+
+  if (!filtered.length) {
+    el.innerHTML = `<span style="font-size:12px;color:var(--text3);">No data for selected period</span>`;
+    return;
+  }
+
+  const curTotal = sum(filtered, field);
+  const lyTotal  = sum(lyData, field);
+  const lyHasData = lyData.length > 0;
+
+  const fmtVal = v => isOrders ? Math.round(v).toLocaleString() : fmt(v);
+  const d = lyHasData ? pdiff(curTotal, lyTotal) : null;
+
+  let diffBadge = '';
+  if (d !== null) {
+    const up    = d >= 0;
+    const arrow = up ? '↑' : '↓';
+    const cls   = up ? 'badge-up' : 'badge-down';
+    diffBadge = `<span class="${cls}" style="font-size:13px;padding:5px 11px;border-radius:20px;font-weight:700;white-space:nowrap;">${arrow} ${(Math.abs(d) * 100).toFixed(1)}% YoY</span>`;
+  } else {
+    diffBadge = `<span class="badge-neu" style="font-size:13px;padding:5px 11px;border-radius:20px;font-weight:600;white-space:nowrap;">No LY data</span>`;
+  }
+
+  const curRange = `${ymdPretty(minDate)} – ${ymdPretty(maxDate)}`;
+  const lyRange  = lyMin && lyMax ? `${ymdPretty(lyMin)} – ${ymdPretty(lyMax)}` : '—';
+
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:2px;min-width:130px;">
+      <span style="font-size:10px;font-weight:700;color:#0ea5e9;text-transform:uppercase;letter-spacing:.06em;">${curYear} · Current</span>
+      <span style="font-size:22px;font-weight:800;color:var(--text);line-height:1.1;">${fmtVal(curTotal)}</span>
+      <span style="font-size:10px;color:var(--text3);">${curRange}</span>
+    </div>
+    <div style="width:1px;height:42px;background:var(--border);"></div>
+    <div style="display:flex;flex-direction:column;gap:2px;min-width:130px;">
+      <span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;">${lyYear} · Last Year</span>
+      <span style="font-size:22px;font-weight:800;color:var(--text2);line-height:1.1;">${lyHasData ? fmtVal(lyTotal) : '—'}</span>
+      <span style="font-size:10px;color:var(--text3);">${lyRange}</span>
+    </div>
+    <div style="margin-left:4px;">${diffBadge}</div>
+    <div style="margin-left:auto;font-size:11px;color:var(--text3);text-align:right;">Total ${metricLabel} during the visible period</div>
+  `;
+}
+
 function renderYoYChart(filtered, all, mode) {
   document.getElementById('skelYoy').style.display = 'none';
 
@@ -290,11 +345,12 @@ function renderYoYChart(filtered, all, mode) {
   const minDate = filtered[0]?.DATE;
   const maxDate = filtered[filtered.length - 1]?.DATE;
   let lyVals = labels.map(() => null);
+  let lyMin = null, lyMax = null, lyData = [];
 
   if (minDate && maxDate) {
-    const lyMin = shiftYear(minDate, -1);
-    const lyMax = shiftYear(maxDate, -1);
-    const lyData = all.filter(r => r.DATE >= lyMin && r.DATE <= lyMax);
+    lyMin = shiftYear(minDate, -1);
+    lyMax = shiftYear(maxDate, -1);
+    lyData = all.filter(r => r.DATE >= lyMin && r.DATE <= lyMax);
     const lyMap = groupBy(lyData, g, field);
     lyVals = labels.map(k => {
       const lyKey = g === 'day' ? shiftYear(k, -1) : shiftMonthKey(k, -1);
@@ -318,6 +374,12 @@ function renderYoYChart(filtered, all, mode) {
   // Determine year labels from data
   const curYear = filtered[filtered.length - 1]?.DATE?.slice(0, 4) || new Date().getFullYear().toString();
   const lyYear = String(parseInt(curYear) - 1);
+
+  // ── Period totals (current vs LY same period) ────────────────────────────
+  renderYoYTotals({
+    filtered, lyData, field, metricLabel, isOrders,
+    minDate, maxDate, lyMin, lyMax, curYear, lyYear,
+  });
 
   S.charts.yoy = new Chart(document.getElementById('yoyChart'), {
     type: 'line',
