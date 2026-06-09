@@ -13,7 +13,7 @@ async function loadInventoryData() {
 
   document.getElementById('inventoryHead').innerHTML = '';
   document.getElementById('inventoryBody').innerHTML =
-    `<tr><td colspan="14" style="text-align:center;padding:48px;color:var(--text3);">
+    `<tr><td colspan="16" style="text-align:center;padding:48px;color:var(--text3);">
        <div style="display:inline-block;width:28px;height:28px;border:2px solid var(--border);border-top-color:#0ea5e9;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px;"></div>
        <div>Loading inventory data…</div>
      </td></tr>`;
@@ -33,7 +33,7 @@ async function loadInventoryData() {
     renderInventoryPage();
   } catch (err) {
     document.getElementById('inventoryBody').innerHTML =
-      `<tr><td colspan="14" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
+      `<tr><td colspan="16" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
   }
 }
 window.loadInventoryData = loadInventoryData;
@@ -151,6 +151,8 @@ function renderForecastTable() {
       <th style="min-width:80px;">ADU 30d</th>
       <th style="min-width:100px;">FC 60d</th>
       <th style="min-width:110px;">Restock Need</th>
+      <th style="min-width:100px;">Profit / Unit</th>
+      <th style="min-width:120px;">Est Restock Profit</th>
       <th style="min-width:90px;">Threshold</th>
       <th style="min-width:140px;">Status</th>
     </tr>`;
@@ -183,6 +185,8 @@ function renderForecastTable() {
     adu_30d:               r => Number(r.ADU_30D)              || 0,
     forecast_60d:          r => Number(r.FORECAST_60D)         || 0,
     restock_needed:        r => Number(r.RESTOCK_NEEDED)       || 0,
+    profit_per_unit:       r => Number(r.PROFIT_PER_UNIT)      || 0,
+    est_restock_profit:    r => Number(r.EST_RESTOCK_PROFIT)   || 0,
   }[sortBy] || (r => Number(r.RESTOCK_NEEDED) || 0);
 
   rows.sort((a, b) => {
@@ -202,7 +206,7 @@ function renderForecastTable() {
   const tbody = document.getElementById('inventoryBody');
   if (!rows.length) {
     const msg = query ? `No SKUs matching "${searchRaw}"` : 'No inventory rows for this channel';
-    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="16" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
 
@@ -213,9 +217,17 @@ function renderForecastTable() {
     const fc60d        = Number(r.FORECAST_60D)     || 0;
     const adu30        = Number(r.ADU_30D)          || 0;
     const days         = Number(r.DAYS_SINCE_LAST_ORDER);
+    const ppu          = r.PROFIT_PER_UNIT;
+    const estProfit    = r.EST_RESTOCK_PROFIT;
+    const ppuNum       = Number(ppu);
+    const estNum       = Number(estProfit);
+    const ppuMissing   = ppu == null || isNaN(ppuNum);
+    const estMissing   = estProfit == null || isNaN(estNum);
     const availColor   = avail === 0 ? '#ef4444' : avail < fc60d ? '#f59e0b' : 'var(--text)';
     const needColor    = restockNeed > 0 ? '#ef4444' : 'var(--text3)';
     const daysColor    = days > 30 ? '#f59e0b' : 'var(--text2)';
+    const ppuColor     = ppuMissing ? 'var(--text3)' : ppuNum < 0 ? '#ef4444' : ppuNum === 0 ? 'var(--text3)' : 'var(--text)';
+    const estColor     = estMissing ? 'var(--text3)' : estNum < 0 ? '#ef4444' : estNum === 0 ? 'var(--text3)' : '#10b981';
 
     return `
     <tr>
@@ -237,6 +249,8 @@ function renderForecastTable() {
         <div style="font-size:10px;color:var(--text3);margin-top:1px;">curr ${fmtInt(r.FORECAST_CURR_MONTH)} · next ${fmtInt(r.FORECAST_NEXT_MONTH)}</div>
       </td>
       <td style="text-align:right;"><span style="${V}color:${needColor};">${fmtInt(restockNeed)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:${ppuColor};">${ppuMissing ? '—' : fmt(ppuNum)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:${estColor};">${estMissing ? '—' : fmt(estNum)}</span></td>
       <td style="text-align:right;">${thresholdBadge(r.RESTOCK_THRESHOLD_MET)}</td>
       <td style="text-align:right;">${statusBadge(r.INVENTORY_STATUS)}</td>
     </tr>`;
