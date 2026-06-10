@@ -283,7 +283,7 @@ function renderAgingTable() {
     <tr>
       <th style="text-align:right;min-width:40px;width:40px;">#</th>
       <th style="text-align:left;min-width:200px;">SKU / Product</th>
-      <th style="min-width:140px;">Inventory</th>
+      <th style="min-width:140px;">Warehouse</th>
       <th style="min-width:90px;">Available</th>
       <th style="min-width:150px;">Last Order</th>
       <th style="min-width:90px;">Days Since</th>
