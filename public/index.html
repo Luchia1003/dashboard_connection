@@ -543,7 +543,7 @@
         <!-- View toggle -->
         <div class="toggle-group" id="inventoryToggle">
           <button class="toggle-btn active" onclick="setInventoryView('forecast',this)">Forecast</button>
-          <button class="toggle-btn" onclick="setInventoryView('aging',this)">FBA Slow Traffic</button>
+          <button class="toggle-btn" onclick="setInventoryView('aging',this)">Slow Traffic</button>
         </div>
         <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
 
@@ -592,6 +592,12 @@
 
         <!-- Aging controls -->
         <div id="agingControls" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:12px;color:var(--text3);">Inventory</span>
+          <select id="agingChannel" class="ctrl-sel" onchange="renderInventoryPage()">
+            <option value="">All</option>
+            <option value="amazon_fba">Amazon FBA</option>
+            <option value="hooves_and_paws">Hooves and Paws</option>
+          </select>
           <span style="font-size:12px;color:var(--text3);">Priority</span>
           <select id="agingPriority" class="ctrl-sel" onchange="renderInventoryPage()">
             <option value="">All Tiers</option>
@@ -604,8 +610,6 @@
           <select id="agingSort" class="ctrl-sel" onchange="renderInventoryPage()">
             <option value="days_since_last_order">Days Since Last Order</option>
             <option value="available">Available</option>
-            <option value="total_quantity">Total Quantity</option>
-            <option value="inbound_total">Inbound Total</option>
             <option value="lifetime_units_sold">Lifetime Units Sold</option>
             <option value="sku">SKU</option>
           </select>

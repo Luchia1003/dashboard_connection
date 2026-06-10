@@ -79,18 +79,22 @@ function fmtDate(v) {
 
 // Channel chip styling
 function channelChip(ch) {
-  const c = String(ch || '').toLowerCase();
+  const c = String(ch || '').toLowerCase().trim();
   const label = {
-    amazon_fba:    'Amazon FBA',
-    amazon_nonfba: 'Amazon Non-FBA',
-    shopify:       'Shopify',
-    total:         'Total',
+    'amazon_fba':      'Amazon FBA',
+    'amazon_nonfba':   'Amazon Non-FBA',
+    'shopify':         'Shopify',
+    'total':           'Total',
+    'hooves_and_paws': 'Hooves and Paws',
+    'both same day':   'Both (same day)',
   }[c] || ch || '—';
   const color = {
-    amazon_fba:    { fg: '#f59e0b', bg: 'rgba(245,158,11,.12)' },
-    amazon_nonfba: { fg: '#a16207', bg: 'rgba(161,98,7,.12)' },
-    shopify:       { fg: '#10b981', bg: 'rgba(16,185,129,.12)' },
-    total:         { fg: '#0ea5e9', bg: 'rgba(14,165,233,.12)' },
+    'amazon_fba':      { fg: '#f59e0b', bg: 'rgba(245,158,11,.12)' },
+    'amazon_nonfba':   { fg: '#a16207', bg: 'rgba(161,98,7,.12)' },
+    'shopify':         { fg: '#10b981', bg: 'rgba(16,185,129,.12)' },
+    'total':           { fg: '#0ea5e9', bg: 'rgba(14,165,233,.12)' },
+    'hooves_and_paws': { fg: '#8b5cf6', bg: 'rgba(139,92,246,.12)' },
+    'both same day':   { fg: 'var(--text2)', bg: 'rgba(100,116,139,.12)' },
   }[c] || { fg: 'var(--text2)', bg: 'rgba(100,116,139,.12)' };
   return `<span style="font-size:11px;font-weight:600;color:${color.fg};background:${color.bg};padding:2px 8px;border-radius:6px;white-space:nowrap;">${label}</span>`;
 }
@@ -110,17 +114,20 @@ function thresholdBadge(v) {
   return '—';
 }
 
-// Map review priority to a colored badge
+// Map review priority to a colored badge. Four distinct tiers so 3 and 4
+// don't both read as "red": green → amber → orange → red.
 function priorityBadge(p) {
   const s = String(p || '');
   if (!s) return '<span class="badge-neu" style="font-size:10px;padding:2px 7px;border-radius:6px;">—</span>';
-  const cls =
-    s.startsWith('1') ? 'badge-up'    :   // Warning  → green
-    s.startsWith('2') ? 'badge-surge' :   // Review   → amber
-    s.startsWith('3') ? 'badge-down'  :   // Discontinue Candidate → red
-    s.startsWith('4') ? 'badge-down'  :   // Definitely Discontinue → red
-    'badge-neu';
-  return `<span class="${cls}" style="font-size:10px;padding:2px 7px;border-radius:6px;font-weight:600;white-space:nowrap;">${s}</span>`;
+  const styles = {
+    '1': { fg: '#10b981', bg: 'rgba(16,185,129,.15)', bd: 'rgba(16,185,129,.3)' }, // green
+    '2': { fg: '#f59e0b', bg: 'rgba(245,158,11,.15)', bd: 'rgba(245,158,11,.3)' }, // amber
+    '3': { fg: '#f97316', bg: 'rgba(249,115,22,.15)', bd: 'rgba(249,115,22,.3)' }, // orange
+    '4': { fg: '#ef4444', bg: 'rgba(239,68,68,.15)',  bd: 'rgba(239,68,68,.3)'  }, // red
+  };
+  const t = s.charAt(0);
+  const sty = styles[t] || { fg: 'var(--text2)', bg: 'rgba(100,116,139,.15)', bd: 'rgba(100,116,139,.3)' };
+  return `<span style="font-size:10px;padding:2px 7px;border-radius:6px;font-weight:600;white-space:nowrap;color:${sty.fg};background:${sty.bg};border:1px solid ${sty.bd};">${s}</span>`;
 }
 
 // ── Forecast Table ───────────────────────────────────────────────────────────
@@ -257,14 +264,17 @@ function renderForecastTable() {
   }).join('');
 }
 
-// ── FBA Aging Table ──────────────────────────────────────────────────────────
+// ── Slow Traffic / Aging Inventory Table ─────────────────────────────────────
+// Data source: DASHBOARD_DB.AGING_INVENTORY (covers both Amazon FBA and
+// Hooves and Paws warehouses).
 
 function renderAgingTable() {
-  const priority  = (document.getElementById('agingPriority') || {}).value || '';
-  const sortBy    = (document.getElementById('agingSort')     || {}).value || 'days_since_last_order';
-  const sortDir   = (document.getElementById('agingDir')      || {}).value || 'asc';
-  const searchRaw = (document.getElementById('agingSearch')   || {}).value || '';
-  const query     = searchRaw.trim().toLowerCase();
+  const chanFilter = (document.getElementById('agingChannel')  || {}).value || '';
+  const priority   = (document.getElementById('agingPriority') || {}).value || '';
+  const sortBy     = (document.getElementById('agingSort')     || {}).value || 'days_since_last_order';
+  const sortDir    = (document.getElementById('agingDir')      || {}).value || 'asc';
+  const searchRaw  = (document.getElementById('agingSearch')   || {}).value || '';
+  const query      = searchRaw.trim().toLowerCase();
 
   const clrBtn = document.getElementById('agingSearchClear');
   if (clrBtn) clrBtn.style.display = query ? '' : 'none';
@@ -273,17 +283,19 @@ function renderAgingTable() {
     <tr>
       <th style="text-align:right;min-width:40px;width:40px;">#</th>
       <th style="text-align:left;min-width:200px;">SKU / Product</th>
+      <th style="min-width:140px;">Inventory</th>
       <th style="min-width:90px;">Available</th>
-      <th style="min-width:90px;">Total Qty</th>
-      <th style="min-width:90px;">Reserved</th>
-      <th style="min-width:90px;">Inbound</th>
-      <th style="min-width:110px;">Last Order</th>
+      <th style="min-width:150px;">Last Order</th>
       <th style="min-width:90px;">Days Since</th>
       <th style="min-width:110px;">Lifetime Sold</th>
       <th style="min-width:240px;">Review Priority</th>
     </tr>`;
 
   let rows = [...(S.fbaAging || [])];
+
+  if (chanFilter) {
+    rows = rows.filter(r => String(r.CHANNEL || '').toLowerCase() === chanFilter);
+  }
 
   if (priority) {
     rows = rows.filter(r => String(r.REVIEW_PRIORITY || '').startsWith(priority + '.'));
@@ -292,7 +304,6 @@ function renderAgingTable() {
   if (query) {
     rows = rows.filter(r =>
       String(r.ORIGINAL_SKU || '').toLowerCase().includes(query) ||
-      String(r.BASE_SKU     || '').toLowerCase().includes(query) ||
       String(r.PRODUCT_NAME || '').toLowerCase().includes(query)
     );
   }
@@ -300,8 +311,6 @@ function renderAgingTable() {
   const sortFn = {
     sku:                   r => String(r.ORIGINAL_SKU || ''),
     available:             r => Number(r.AVAILABLE)            || 0,
-    total_quantity:        r => Number(r.TOTAL_QUANTITY)       || 0,
-    inbound_total:         r => Number(r.INBOUND_TOTAL)        || 0,
     lifetime_units_sold:   r => Number(r.LIFETIME_UNITS_SOLD)  || 0,
     days_since_last_order: r => Number(r.DAYS_SINCE_LAST_ORDER) || 0,
   }[sortBy] || (r => Number(r.DAYS_SINCE_LAST_ORDER) || 0);
@@ -321,32 +330,41 @@ function renderAgingTable() {
 
   const tbody = document.getElementById('inventoryBody');
   if (!rows.length) {
-    const msg = query ? `No SKUs matching "${searchRaw}"` : 'No aging FBA inventory';
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    const msg = query ? `No SKUs matching "${searchRaw}"` : 'No aging inventory';
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
 
   const V = 'font-size:14px;font-weight:700;';
   tbody.innerHTML = rows.map((r, i) => {
     const days = Number(r.DAYS_SINCE_LAST_ORDER);
+    // 4 tiers matching priorityBadge colors: green → amber → orange → red
     const daysColor =
       days > 365 ? '#ef4444' :
-      days > 180 ? '#dc2626' :
+      days > 180 ? '#f97316' :
       days > 90  ? '#f59e0b' :
       '#10b981';
+
+    const invChan  = String(r.CHANNEL || '').toLowerCase().trim();
+    const lastChan = String(r.LAST_ORDER_CHANNEL || '').toLowerCase().trim();
+    // For FBA inventory, last_order_channel is always 'amazon_fba' (same as
+    // inventory), so showing it under the date would be redundant. Only show
+    // the chip when it actually adds information (i.e., HnP rows).
+    const showLastChan = lastChan && lastChan !== invChan;
 
     return `
     <tr>
       <td style="text-align:right;font-size:12px;color:var(--text3);">${i + 1}</td>
       <td style="text-align:left;vertical-align:top;">
-        <div style="font-weight:700;color:var(--text);font-size:13px;font-family:monospace;">${r.ORIGINAL_SKU || r.BASE_SKU || '—'}</div>
+        <div style="font-weight:700;color:var(--text);font-size:13px;font-family:monospace;">${r.ORIGINAL_SKU || '—'}</div>
         ${r.PRODUCT_NAME ? `<div style="font-size:11px;color:var(--text3);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.PRODUCT_NAME}">${r.PRODUCT_NAME}</div>` : ''}
       </td>
+      <td style="text-align:right;">${channelChip(r.CHANNEL)}</td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmtInt(r.AVAILABLE)}</span></td>
-      <td style="text-align:right;"><span style="${V}color:var(--text2);">${fmtInt(r.TOTAL_QUANTITY)}</span></td>
-      <td style="text-align:right;"><span style="${V}color:var(--text3);">${fmtInt(r.RESERVED_TOTAL)}</span></td>
-      <td style="text-align:right;"><span style="${V}color:var(--text3);">${fmtInt(r.INBOUND_TOTAL)}</span></td>
-      <td style="text-align:right;font-size:12px;color:var(--text2);">${fmtDate(r.LAST_ORDER_DATE)}</td>
+      <td style="text-align:right;vertical-align:top;">
+        <div style="font-size:12px;color:var(--text2);">${fmtDate(r.LAST_ORDER_DATE)}</div>
+        ${showLastChan ? `<div style="margin-top:4px;">${channelChip(r.LAST_ORDER_CHANNEL)}</div>` : ''}
+      </td>
       <td style="text-align:right;"><span style="font-size:14px;font-weight:700;color:${daysColor};">${isNaN(days) ? '—' : days}</span></td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmtInt(r.LIFETIME_UNITS_SOLD)}</span></td>
       <td style="text-align:right;">${priorityBadge(r.REVIEW_PRIORITY)}</td>
