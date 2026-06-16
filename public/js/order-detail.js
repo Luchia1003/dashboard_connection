@@ -55,7 +55,8 @@ function setOrderDetailDate(val) {
   S.orderDetailDate = val;
   renderOrderDetailPage();
 }
-window.setOrderDetailDate = setOrderDetailDate;
+window.setOrderDetailDate     = setOrderDetailDate;
+window.getOrderDetailFiltered = getOrderDetailFiltered;
 
 // ── Load (lazy) ───────────────────────────────────────────────────────────────
 

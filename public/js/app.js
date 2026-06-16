@@ -47,21 +47,25 @@ function pdiff(cur, base) { return base ? (cur - base) / Math.abs(base) : null; 
 window.fmt = fmt; window.sum = sum; window.avg = avg; window.pdiff = pdiff;
 
 // ── CSV download ──────────────────────────────────────────────────────────────
-// Serialises the raw rows (whatever the API returned, no client-side filtering)
-// to a UTF-8 CSV with a BOM so Excel opens it correctly, and triggers a
-// browser download. Header order is taken from the first row's keys.
+// Each per-page helper applies the same filters the user sees in the UI, then
+// writes a UTF-8 CSV (with BOM so Excel detects encoding). Filenames encode
+// the active filters so downloads are self-describing.
 
-function downloadCSV(rows, filename) {
+function downloadCSV(rows, filename, columns) {
   if (!Array.isArray(rows) || !rows.length) {
     alert('No data to download yet. Try again once the table has loaded.');
     return;
   }
 
-  // Collect headers from the union of all rows so we don't lose columns that
-  // happen to be null in the first row.
-  const headerSet = new Set();
-  rows.forEach(r => Object.keys(r || {}).forEach(k => headerSet.add(k)));
-  const headers = [...headerSet];
+  let headers;
+  if (Array.isArray(columns) && columns.length) {
+    headers = columns;
+  } else {
+    // Union of all row keys so we don't lose columns that are null in row 0.
+    const headerSet = new Set();
+    rows.forEach(r => Object.keys(r || {}).forEach(k => headerSet.add(k)));
+    headers = [...headerSet];
+  }
 
   const escape = v => {
     if (v == null) return '';
@@ -84,7 +88,6 @@ function downloadCSV(rows, filename) {
     lines.push(headers.map(h => escape(r ? r[h] : null)).join(','));
   });
 
-  // UTF-8 BOM so Excel detects encoding correctly
   const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -96,43 +99,112 @@ function downloadCSV(rows, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ── Filename helpers ──────────────────────────────────────────────────────────
+
 function todayStamp() {
   const d = new Date();
   const p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
 }
 
-// Per-page download helpers — each grabs the FULL raw dataset (what the API
-// returned), independent of any UI filters/sorts.
-
-function downloadSkuCSV() {
-  downloadCSV(S.sku, `SKU_SUMMARY_METRICS_${todayStamp()}.csv`);
+function dateForFile(s) {
+  if (!s) return '';
+  return String(s).slice(0, 10).replace(/-/g, '');
 }
 
+// Compact label describing the currently selected global Time Range.
+function trLabel() {
+  if (!S.tr || S.tr === 'all') return 'alltime';
+  const r = computeRange(S.tr, S.customFrom, S.customTo);
+  if (!r) return 'alltime';
+  const f = dateForFile(r.f), t = dateForFile(r.t);
+  return f === t ? f : `${f}-${t}`;
+}
+
+window.downloadCSV  = downloadCSV;
+window.todayStamp   = todayStamp;
+window.dateForFile  = dateForFile;
+window.trLabel      = trLabel;
+
+// ── Per-page download helpers ────────────────────────────────────────────────
+
+// Product Detail → matches the global Time Range, Platform, and Net/Order/Refund mode.
+function downloadSkuCSV() {
+  if (!S.sku) { alert('Data not loaded yet.'); return; }
+  const rows = getSku(); // already platform + time-range filtered
+  const mode = S.mode || 'net';
+  const platform = (S.platform || 'all').toLowerCase();
+
+  const base = ['DATE', 'PLATFORM', 'SALES_SKU', 'DESCRIPTION', 'UNIT_COST'];
+  const modeCols = {
+    net:    base.concat(['NET_ORDER_COUNT','NET_QUANTITY','NET_PRODUCT_SALES','NET_GROSS_SALES','NET_MARGIN','NET_COGS','NET_PROFIT','NET_MARGIN_PCT','RETURN_RATE_PLATFORM','RETURN_RATE_ALL']),
+    order:  base.concat(['ORDER_COUNT','ORDER_QUANTITY','ORDER_PRODUCT_SALES','ORDER_GROSS_SALES','ORDER_MARGIN','ORDER_COGS','ORDER_PROFIT']),
+    refund: base.concat(['REFUND_COUNT','REFUND_QUANTITY','REFUND_PRODUCT_SALES','REFUND_GROSS_SALES','REFUND_MARGIN','REFUND_COGS','REFUND_PROFIT']),
+  };
+  const cols = modeCols[mode] || modeCols.net;
+  downloadCSV(rows, `product_detail_${platform}_${mode}_${trLabel()}.csv`, cols);
+}
+
+// Order Detail → matches the platform toggle and the Date dropdown.
 function downloadOrderDetailCSV() {
   if (!S.orderDetail) { loadOrderDetailData(); return; }
-  downloadCSV(S.orderDetail, `ORDER_LEVEL_PROFIT_${todayStamp()}.csv`);
+  const rows = (typeof getOrderDetailFiltered === 'function')
+    ? getOrderDetailFiltered()
+    : (S.orderDetail || []);
+  const platform  = (S.platform || 'all').toLowerCase();
+  const dateLabel = S.orderDetailDate ? dateForFile(S.orderDetailDate) : 'alldates';
+  downloadCSV(rows, `order_detail_${platform}_${dateLabel}_${todayStamp()}.csv`);
 }
 
+// Coupon Order → no filters, filename reflects current view + today's date.
 function downloadCouponCSV() {
   if (!S.couponSku || !S.couponOrder) { loadCouponData(); return; }
   if ((S.couponView || 'sku') === 'sku') {
-    downloadCSV(S.couponSku,   `DAILY_SKU_COUPON_PROFIT_${todayStamp()}.csv`);
+    downloadCSV(S.couponSku,   `sku_level_coupon_order_${todayStamp()}.csv`);
   } else {
-    downloadCSV(S.couponOrder, `COUPON_ORDER_LEVEL_${todayStamp()}.csv`);
+    downloadCSV(S.couponOrder, `order_level_coupon_order_${todayStamp()}.csv`);
   }
 }
 
+// Inventory → Forecast matches Channel + Status; Slow Traffic matches Warehouse + Priority.
 function downloadInventoryCSV() {
   if (!S.inventoryForecast || !S.fbaAging) { loadInventoryData(); return; }
+
   if ((S.inventoryView || 'forecast') === 'forecast') {
-    downloadCSV(S.inventoryForecast, `INVENTORY_FORECAST_${todayStamp()}.csv`);
+    const chSel  = document.getElementById('forecastChannel');
+    const stSel  = document.getElementById('forecastStatus');
+    const channel   = (chSel && chSel.value) || 'total';
+    const statusRaw = (stSel && stSel.value) || '';
+
+    let rows = (S.inventoryForecast || []).filter(
+      r => String(r.CHANNEL || '').toLowerCase() === channel
+    );
+    if (statusRaw === 'threshold') {
+      rows = rows.filter(r => String(r.RESTOCK_THRESHOLD_MET || '') === 'Y');
+    } else if (statusRaw) {
+      rows = rows.filter(r => String(r.INVENTORY_STATUS || '') === statusRaw);
+    }
+
+    const statusSlug = !statusRaw ? 'all'
+      : statusRaw === 'threshold' ? 'threshold_met'
+      : statusRaw.toLowerCase().replace(/\s+/g, '_');
+    downloadCSV(rows, `inventory_forecast_${channel}_${statusSlug}_${todayStamp()}.csv`);
   } else {
-    downloadCSV(S.fbaAging,          `AGING_INVENTORY_${todayStamp()}.csv`);
+    const whSel  = document.getElementById('agingChannel');
+    const priSel = document.getElementById('agingPriority');
+    const wh  = (whSel  && whSel.value)  || '';
+    const pri = (priSel && priSel.value) || '';
+
+    let rows = [...(S.fbaAging || [])];
+    if (wh)  rows = rows.filter(r => String(r.CHANNEL || '').toLowerCase() === wh);
+    if (pri) rows = rows.filter(r => String(r.REVIEW_PRIORITY || '').startsWith(pri + '.'));
+
+    const whSlug  = wh  || 'all_warehouses';
+    const priSlug = pri ? `tier${pri}` : 'all_tiers';
+    downloadCSV(rows, `slow_traffic_${whSlug}_${priSlug}_${todayStamp()}.csv`);
   }
 }
 
-window.downloadCSV            = downloadCSV;
 window.downloadSkuCSV         = downloadSkuCSV;
 window.downloadOrderDetailCSV = downloadOrderDetailCSV;
 window.downloadCouponCSV      = downloadCouponCSV;
