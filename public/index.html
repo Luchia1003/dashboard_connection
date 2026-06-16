@@ -22,15 +22,39 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
 
-    #sidebar {
-      position: fixed; left: 0; top: 0; bottom: 0; width: 220px;
-      background: var(--sidebar); border-right: 1px solid var(--border);
-      z-index: 50; display: flex; flex-direction: column; transition: transform 0.25s ease;
-    }
-    #main { margin-left: 220px; min-height: 100vh; }
+    #main { min-height: 100vh; }
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
     .kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 
+    /* Brand button (top-left) — click to open page navigation dropdown */
+    .brand-btn {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: transparent; border: none; cursor: pointer;
+      padding: 4px 10px 4px 4px; border-radius: 10px;
+      transition: background 0.15s;
+    }
+    .brand-btn:hover { background: var(--hover); }
+    .brand-logo {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: linear-gradient(135deg, #0ea5e9, #6366f1);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .brand-name { font-weight: 700; font-size: 15px; color: var(--text); }
+    .brand-caret {
+      color: var(--text3); transition: transform 0.2s;
+      width: 13px; height: 13px; flex-shrink: 0;
+    }
+    .brand-btn.open .brand-caret { transform: rotate(180deg); color: #0ea5e9; }
+
+    /* Navigation dropdown attached to the brand button */
+    .nav-dropdown {
+      position: fixed; top: 60px; left: 18px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.20);
+      padding: 8px; min-width: 240px; z-index: 100;
+      display: none; flex-direction: column; gap: 2px;
+    }
+    .nav-dropdown.open { display: flex; }
     .nav-item {
       display: flex; align-items: center; gap: 10px; padding: 9px 12px;
       border-radius: 8px; cursor: pointer; transition: all 0.15s;
@@ -38,6 +62,15 @@
     }
     .nav-item:hover { background: var(--hover); color: var(--text); }
     .nav-item.active { background: #0ea5e9; color: white; }
+    .nav-dropdown-divider { height: 1px; background: var(--border); margin: 6px 4px; }
+    .nav-dropdown-footer { padding: 4px 12px 6px; font-size: 11px; color: var(--text3); }
+
+    /* Invisible backdrop that closes the dropdown when clicking elsewhere */
+    #navBackdrop {
+      position: fixed; inset: 0; background: transparent;
+      z-index: 99; display: none;
+    }
+    #navBackdrop.open { display: block; }
 
     .toggle-group { display: flex; background: var(--input); border-radius: 8px; padding: 3px; gap: 2px; }
     .toggle-btn {
@@ -116,15 +149,9 @@
     @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
     @keyframes spin { to { transform: rotate(360deg) } }
 
-    #mobileBackdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:40; }
-    #hamburgerBtn { display: none; }
-
     @media (max-width: 767px) {
-      #sidebar { transform: translateX(-100%); }
-      #sidebar.open { transform: translateX(0); }
-      #main { margin-left: 0; }
-      #hamburgerBtn { display: flex; }
-      #mobileBackdrop.show { display: block; }
+      .brand-name { display: none; }
+      .nav-dropdown { left: 8px; right: 8px; min-width: 0; }
       .hide-mobile { display: none !important; }
       .kpi-grid { grid-template-columns: repeat(2,1fr) !important; }
       .comp-grid { grid-template-columns: 1fr !important; }
@@ -132,8 +159,6 @@
       .ctrl-row { flex-wrap: wrap; }
     }
     @media (min-width: 768px) and (max-width: 1023px) {
-      #sidebar { width: 190px; }
-      #main { margin-left: 190px; }
       .kpi-grid { grid-template-columns: repeat(2,1fr) !important; }
     }
 
@@ -150,52 +175,46 @@
   <div style="color:var(--text2);font-size:13px;">Loading dashboard…</div>
 </div>
 
-<!-- Mobile backdrop -->
-<div id="mobileBackdrop" onclick="closeSidebar()"></div>
-
-<!-- Sidebar -->
-<aside id="sidebar">
-  <div style="padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
-    <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#0ea5e9,#6366f1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-      <svg width="16" height="16" fill="none" stroke="white" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-    </div>
-    <span style="font-weight:700;font-size:15px;color:var(--text);">Analytics</span>
+<!-- Navigation dropdown (attached to the brand button in the topbar) -->
+<div id="navBackdrop" onclick="closeNavMenu()"></div>
+<div class="nav-dropdown" id="navDropdown">
+  <div class="nav-item active" id="navSales" onclick="switchPage('sales')">
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+    Sales Overview
   </div>
-  <nav style="flex:1;padding:12px 10px;display:flex;flex-direction:column;gap:3px;">
-    <div class="nav-item active" id="navSales" onclick="switchPage('sales')">
-      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-      Sales Overview
-    </div>
-    <div class="nav-item" id="navProducts" onclick="switchPage('products')">
-      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-      Product Detail
-    </div>
-    <div class="nav-item" id="navOrderDetail" onclick="switchPage('orderDetail')">
-      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
-      Order Detail
-    </div>
-    <div class="nav-item" id="navCoupon" onclick="switchPage('coupon')">
-      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M17 17h.01M9.586 9.586l4.828 4.828M3 12a9 9 0 1118 0 9 9 0 01-18 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9a1 1 0 100-2 1 1 0 000 2zm6 6a1 1 0 100-2 1 1 0 000 2z"/></svg>
-      Coupon Order
-    </div>
-    <div class="nav-item" id="navInventory" onclick="switchPage('inventory')">
-      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7H4M20 7v12a1 1 0 01-1 1H5a1 1 0 01-1-1V7M20 7l-2-3H6L4 7M9 11h6"/></svg>
-      Inventory
-    </div>
-  </nav>
-  <div style="padding:12px 16px;border-top:1px solid var(--border);">
-    <div id="sidebarStatus" style="font-size:11px;color:var(--text3);">–</div>
+  <div class="nav-item" id="navProducts" onclick="switchPage('products')">
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+    Product Detail
   </div>
-</aside>
+  <div class="nav-item" id="navOrderDetail" onclick="switchPage('orderDetail')">
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+    Order Detail
+  </div>
+  <div class="nav-item" id="navCoupon" onclick="switchPage('coupon')">
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M17 17h.01M9.586 9.586l4.828 4.828M3 12a9 9 0 1118 0 9 9 0 01-18 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9a1 1 0 100-2 1 1 0 000 2zm6 6a1 1 0 100-2 1 1 0 000 2z"/></svg>
+    Coupon Order
+  </div>
+  <div class="nav-item" id="navInventory" onclick="switchPage('inventory')">
+    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7H4M20 7v12a1 1 0 01-1 1H5a1 1 0 01-1-1V7M20 7l-2-3H6L4 7M9 11h6"/></svg>
+    Inventory
+  </div>
+  <div class="nav-dropdown-divider"></div>
+  <div class="nav-dropdown-footer" id="sidebarStatus">–</div>
+</div>
 
 <!-- Main -->
 <main id="main">
 
   <!-- Topbar -->
-  <header style="display:flex;align-items:center;gap:10px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--card);position:sticky;top:0;z-index:30;">
-    <button id="hamburgerBtn" onclick="openSidebar()" style="background:none;border:none;cursor:pointer;color:var(--text2);padding:4px;border-radius:6px;">
-      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  <header style="display:flex;align-items:center;gap:12px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--card);position:sticky;top:0;z-index:30;">
+    <button class="brand-btn" id="brandBtn" onclick="toggleNavMenu()" aria-label="Open navigation menu">
+      <div class="brand-logo">
+        <svg width="16" height="16" fill="none" stroke="white" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      </div>
+      <span class="brand-name">Analytics</span>
+      <svg class="brand-caret" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
     </button>
+    <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
     <h1 id="pageTitle" style="font-size:18px;font-weight:700;color:var(--text);">Sales Dashboard</h1>
     <div style="flex:1;"></div>
 
@@ -591,15 +610,15 @@
     <section id="inventorySection" style="display:none;">
       <!-- Sticky controls -->
       <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:57px;z-index:25;">
-        <!-- View toggle -->
+        <!-- ── Row 1: View toggle + filters (Channel/Status or Warehouse/Priority) ── -->
         <div class="toggle-group" id="inventoryToggle">
           <button class="toggle-btn active" onclick="setInventoryView('forecast',this)">Forecast</button>
           <button class="toggle-btn" onclick="setInventoryView('aging',this)">Slow Traffic</button>
         </div>
         <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
 
-        <!-- Forecast controls -->
-        <div id="forecastControls" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <!-- Forecast filters -->
+        <div class="forecast-only" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-size:12px;color:var(--text3);">Channel</span>
           <select id="forecastChannel" class="ctrl-sel" onchange="renderInventoryPage()">
             <option value="total">Total (Non-FBA + Shopify)</option>
@@ -616,6 +635,32 @@
             <option value="Sufficient">Sufficient</option>
             <option value="threshold">Threshold met (Y)</option>
           </select>
+        </div>
+
+        <!-- Aging filters -->
+        <div class="aging-only" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:12px;color:var(--text3);">Warehouse</span>
+          <select id="agingChannel" class="ctrl-sel" onchange="renderInventoryPage()">
+            <option value="">All</option>
+            <option value="amazon_fba">Amazon FBA</option>
+            <option value="hooves_and_paws">Hooves and Paws</option>
+          </select>
+          <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
+          <span style="font-size:12px;color:var(--text3);">Priority</span>
+          <select id="agingPriority" class="ctrl-sel" onchange="renderInventoryPage()">
+            <option value="">All Tiers</option>
+            <option value="1">1. Warning (61–90d)</option>
+            <option value="2">2. Review (91–180d)</option>
+            <option value="3">3. Discontinue Candidate (181–365d)</option>
+            <option value="4">4. Definitely Discontinue (&gt;365d)</option>
+          </select>
+        </div>
+
+        <!-- Force line break so the next group starts on a new row -->
+        <div style="flex-basis:100%;height:0;"></div>
+
+        <!-- ── Row 2: Sort + Search + CSV download ── -->
+        <div class="forecast-only" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-size:12px;color:var(--text3);">Sort</span>
           <select id="forecastSort" class="ctrl-sel" onchange="renderInventoryPage()">
             <option value="restock_needed">Restock Needed</option>
@@ -641,22 +686,7 @@
           </div>
         </div>
 
-        <!-- Aging controls -->
-        <div id="agingControls" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-size:12px;color:var(--text3);">Warehouse</span>
-          <select id="agingChannel" class="ctrl-sel" onchange="renderInventoryPage()">
-            <option value="">All</option>
-            <option value="amazon_fba">Amazon FBA</option>
-            <option value="hooves_and_paws">Hooves and Paws</option>
-          </select>
-          <span style="font-size:12px;color:var(--text3);">Priority</span>
-          <select id="agingPriority" class="ctrl-sel" onchange="renderInventoryPage()">
-            <option value="">All Tiers</option>
-            <option value="1">1. Warning (61–90d)</option>
-            <option value="2">2. Review (91–180d)</option>
-            <option value="3">3. Discontinue Candidate (181–365d)</option>
-            <option value="4">4. Definitely Discontinue (&gt;365d)</option>
-          </select>
+        <div class="aging-only" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-size:12px;color:var(--text3);">Sort</span>
           <select id="agingSort" class="ctrl-sel" onchange="renderInventoryPage()">
             <option value="days_since_last_order">Days Since Last Order</option>
@@ -675,7 +705,7 @@
           </div>
         </div>
 
-        <!-- CSV download (right side) -->
+        <!-- CSV download (right side of row 2) -->
         <div class="dl-wrap" style="margin-left:auto;">
           <button id="inventoryDlBtn" class="dl-btn" onclick="downloadInventoryCSV()" title="Download the currently selected inventory view (matches Channel/Status or Warehouse/Priority filters)">
             <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
@@ -683,7 +713,8 @@
           </button>
           <span class="dl-hint" id="inventoryDlHint"></span>
         </div>
-        <!-- Meta info (full-width bottom row, left-aligned) -->
+
+        <!-- ── Row 3: Meta info (full-width, left-aligned) ── -->
         <div id="inventoryMeta" class="toolbar-note"></div>
       </div>
 

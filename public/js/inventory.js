@@ -44,8 +44,12 @@ function setInventoryView(view, btn) {
   S.inventoryView = view;
   document.querySelectorAll('#inventoryToggle .toggle-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('forecastControls').style.display = view === 'forecast' ? 'flex' : 'none';
-  document.getElementById('agingControls').style.display    = view === 'aging'    ? 'flex' : 'none';
+  document.querySelectorAll('#inventorySection .forecast-only').forEach(el => {
+    el.style.display = view === 'forecast' ? 'flex' : 'none';
+  });
+  document.querySelectorAll('#inventorySection .aging-only').forEach(el => {
+    el.style.display = view === 'aging' ? 'flex' : 'none';
+  });
   renderInventoryPage();
 }
 window.setInventoryView = setInventoryView;

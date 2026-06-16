@@ -460,7 +460,7 @@ function switchPage(page) {
   // Inventory / Coupon / Order Detail have their own internal filters and don't use the global time range.
   const hideTopbar = page === 'coupon' || page === 'orderDetail' || page === 'inventory';
   document.getElementById('trControls').style.display = hideTopbar ? 'none' : 'flex';
-  closeSidebar();
+  closeNavMenu();
   if (page === 'coupon') {
     loadCouponData();
   } else if (page === 'orderDetail') {
@@ -475,17 +475,22 @@ function switchPage(page) {
 }
 window.switchPage = switchPage;
 
-// ── Sidebar Mobile ────────────────────────────────────────────────────────────
+// ── Navigation dropdown (brand-button menu) ───────────────────────────────────
 
-function openSidebar() {
-  document.getElementById('sidebar').classList.add('open');
-  document.getElementById('mobileBackdrop').classList.add('show');
+function toggleNavMenu() {
+  const open = document.getElementById('navDropdown').classList.toggle('open');
+  document.getElementById('brandBtn').classList.toggle('open', open);
+  document.getElementById('navBackdrop').classList.toggle('open', open);
 }
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('mobileBackdrop').classList.remove('show');
+function closeNavMenu() {
+  document.getElementById('navDropdown').classList.remove('open');
+  document.getElementById('brandBtn').classList.remove('open');
+  document.getElementById('navBackdrop').classList.remove('open');
 }
-window.openSidebar = openSidebar; window.closeSidebar = closeSidebar;
+window.toggleNavMenu = toggleNavMenu;
+window.closeNavMenu  = closeNavMenu;
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNavMenu(); });
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
