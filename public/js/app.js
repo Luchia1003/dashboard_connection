@@ -46,6 +46,98 @@ function pdiff(cur, base) { return base ? (cur - base) / Math.abs(base) : null; 
 
 window.fmt = fmt; window.sum = sum; window.avg = avg; window.pdiff = pdiff;
 
+// ── CSV download ──────────────────────────────────────────────────────────────
+// Serialises the raw rows (whatever the API returned, no client-side filtering)
+// to a UTF-8 CSV with a BOM so Excel opens it correctly, and triggers a
+// browser download. Header order is taken from the first row's keys.
+
+function downloadCSV(rows, filename) {
+  if (!Array.isArray(rows) || !rows.length) {
+    alert('No data to download yet. Try again once the table has loaded.');
+    return;
+  }
+
+  // Collect headers from the union of all rows so we don't lose columns that
+  // happen to be null in the first row.
+  const headerSet = new Set();
+  rows.forEach(r => Object.keys(r || {}).forEach(k => headerSet.add(k)));
+  const headers = [...headerSet];
+
+  const escape = v => {
+    if (v == null) return '';
+    let s;
+    if (v instanceof Date) {
+      s = v.toISOString().slice(0, 10);
+    } else if (typeof v === 'object') {
+      s = JSON.stringify(v);
+    } else {
+      s = String(v);
+    }
+    if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  };
+
+  const lines = [headers.map(escape).join(',')];
+  rows.forEach(r => {
+    lines.push(headers.map(h => escape(r ? r[h] : null)).join(','));
+  });
+
+  // UTF-8 BOM so Excel detects encoding correctly
+  const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function todayStamp() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+}
+
+// Per-page download helpers — each grabs the FULL raw dataset (what the API
+// returned), independent of any UI filters/sorts.
+
+function downloadSkuCSV() {
+  downloadCSV(S.sku, `SKU_SUMMARY_METRICS_${todayStamp()}.csv`);
+}
+
+function downloadOrderDetailCSV() {
+  if (!S.orderDetail) { loadOrderDetailData(); return; }
+  downloadCSV(S.orderDetail, `ORDER_LEVEL_PROFIT_${todayStamp()}.csv`);
+}
+
+function downloadCouponCSV() {
+  if (!S.couponSku || !S.couponOrder) { loadCouponData(); return; }
+  if ((S.couponView || 'sku') === 'sku') {
+    downloadCSV(S.couponSku,   `DAILY_SKU_COUPON_PROFIT_${todayStamp()}.csv`);
+  } else {
+    downloadCSV(S.couponOrder, `COUPON_ORDER_LEVEL_${todayStamp()}.csv`);
+  }
+}
+
+function downloadInventoryCSV() {
+  if (!S.inventoryForecast || !S.fbaAging) { loadInventoryData(); return; }
+  if ((S.inventoryView || 'forecast') === 'forecast') {
+    downloadCSV(S.inventoryForecast, `INVENTORY_FORECAST_${todayStamp()}.csv`);
+  } else {
+    downloadCSV(S.fbaAging,          `AGING_INVENTORY_${todayStamp()}.csv`);
+  }
+}
+
+window.downloadCSV            = downloadCSV;
+window.downloadSkuCSV         = downloadSkuCSV;
+window.downloadOrderDetailCSV = downloadOrderDetailCSV;
+window.downloadCouponCSV      = downloadCouponCSV;
+window.downloadInventoryCSV   = downloadInventoryCSV;
+
 // ── Date Range ────────────────────────────────────────────────────────────────
 
 function toStr(d) { return d.toISOString().slice(0, 10); }

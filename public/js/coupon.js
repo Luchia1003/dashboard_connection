@@ -78,6 +78,8 @@ function setCouponView(view, btn) {
   btn.classList.add('active');
   document.getElementById('couponSkuControls').style.display  = view === 'sku'   ? 'flex' : 'none';
   document.getElementById('couponOrdControls').style.display  = view === 'order' ? 'flex' : 'none';
+  const dlLabel = document.getElementById('couponDlLabel');
+  if (dlLabel) dlLabel.textContent = view === 'sku' ? 'CSV · SKU Level' : 'CSV · Order Level';
   renderCouponPage();
 }
 window.setCouponView = setCouponView;
