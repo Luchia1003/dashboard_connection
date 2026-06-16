@@ -153,7 +153,9 @@ function downloadOrderDetailCSV() {
     : (S.orderDetail || []);
   const platform  = (S.platform || 'all').toLowerCase();
   const dateLabel = S.orderDetailDate ? dateForFile(S.orderDetailDate) : 'alldates';
-  downloadCSV(rows, `order_detail_${platform}_${dateLabel}_${todayStamp()}.csv`);
+  const ds        = (document.getElementById('orderDetailDropship') || {}).value || '';
+  const dsLabel   = ds === 'yes' ? 'dropship_only' : ds === 'no' ? 'non_dropship' : 'all_types';
+  downloadCSV(rows, `order_detail_${platform}_${dateLabel}_${dsLabel}_${todayStamp()}.csv`);
 }
 
 // Coupon Order → no filters, filename reflects current view + today's date.
@@ -274,11 +276,13 @@ function updateDownloadHints() {
     skuH.innerHTML = HINT_PREFIX + hintParts([mode, platformDisplay(), trDisplay()]);
   }
 
-  // Order Detail → platform · date
+  // Order Detail → platform · date · drop-ship filter
   const odH = document.getElementById('orderDetailDlHint');
   if (odH) {
-    const date = S.orderDetailDate || 'All dates';
-    odH.innerHTML = HINT_PREFIX + hintParts([platformDisplay(), date]);
+    const date    = S.orderDetailDate || 'All dates';
+    const ds      = (document.getElementById('orderDetailDropship') || {}).value || '';
+    const dsLabel = ds === 'yes' ? 'Drop Ship Only' : ds === 'no' ? 'Non-Drop Ship Only' : 'All types';
+    odH.innerHTML = HINT_PREFIX + hintParts([platformDisplay(), date, dsLabel]);
   }
 
   // Coupon → SKU level / Order level

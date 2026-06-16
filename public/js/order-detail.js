@@ -12,8 +12,17 @@ function getOrderDetailWindow() {
   };
 }
 
+// True/false test that's tolerant of the various shapes Snowflake / JSON can
+// return for a BOOLEAN column (true, "true", 1, "1", "TRUE", etc.).
+function isDropShip(r) {
+  const v = r.IS_DROPSHIP;
+  if (v === true || v === 1) return true;
+  if (typeof v === 'string') return v.toLowerCase() === 'true' || v === '1';
+  return false;
+}
+
 // Filter to the 5-day window, then optionally to a single selected date,
-// then optionally to a single platform.
+// then optionally to a single platform, then optionally by drop-ship status.
 function getOrderDetailFiltered() {
   if (!S.orderDetail) return [];
   const { from, to } = getOrderDetailWindow();
@@ -28,8 +37,12 @@ function getOrderDetailFiltered() {
   if (p !== 'all') {
     rows = rows.filter(r => String(r.PLATFORM || '').toLowerCase() === p);
   }
+  const ds = (document.getElementById('orderDetailDropship') || {}).value || '';
+  if (ds === 'yes') rows = rows.filter(r =>  isDropShip(r));
+  if (ds === 'no')  rows = rows.filter(r => !isDropShip(r));
   return rows;
 }
+window.isDropShip = isDropShip;
 
 // Populate the date dropdown with up to 5 dates present in the window
 function populateOrderDetailDates() {
@@ -64,7 +77,7 @@ async function loadOrderDetailData() {
   if (S.orderDetail) { renderOrderDetailPage(); return; }
 
   document.getElementById('orderDetailBody').innerHTML =
-    `<tr><td colspan="10" style="text-align:center;padding:48px;color:var(--text3);">
+    `<tr><td colspan="12" style="text-align:center;padding:48px;color:var(--text3);">
        <div style="display:inline-block;width:28px;height:28px;border:2px solid var(--border);border-top-color:#0ea5e9;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px;"></div>
        <div>Loading order data…</div>
      </td></tr>`;
@@ -78,7 +91,7 @@ async function loadOrderDetailData() {
     renderOrderDetailPage();
   } catch (err) {
     document.getElementById('orderDetailBody').innerHTML =
-      `<tr><td colspan="10" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
+      `<tr><td colspan="12" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
   }
 }
 window.loadOrderDetailData = loadOrderDetailData;
@@ -126,7 +139,7 @@ function renderOrderDetailPage() {
   const tbody = document.getElementById('orderDetailBody');
   if (!rows.length) {
     const msg = query ? `No orders matching "${searchRaw}"` : 'No data for selected period';
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
 
@@ -138,12 +151,22 @@ function renderOrderDetailPage() {
     const platLow     = plat.toLowerCase();
     const platColor   = platLow === 'shopify' ? '#10b981' : platLow === 'amazon' ? '#f59e0b' : 'var(--text2)';
     const platBg      = platLow === 'shopify' ? 'rgba(16,185,129,.12)' : platLow === 'amazon' ? 'rgba(245,158,11,.12)' : 'rgba(100,116,139,.12)';
+    const ds          = isDropShip(r);
+    const dsFee       = Number(r.DROPSHIP_FEE) || 0;
+    const dsBadge     = ds
+      ? `<span style="font-size:11px;font-weight:600;color:#a855f7;background:rgba(168,85,247,.14);padding:2px 8px;border-radius:6px;">Drop Ship</span>`
+      : `<span style="font-size:11px;font-weight:500;color:var(--text3);background:var(--input);padding:2px 8px;border-radius:6px;">Direct</span>`;
+    const dsFeeCell   = dsFee > 0
+      ? `<span style="${V}color:var(--text2);">${fmt(dsFee)}</span>`
+      : `<span style="color:var(--text3);">—</span>`;
     return `
     <tr>
       <td style="text-align:right;font-size:12px;color:var(--text3);">${i + 1}</td>
       <td style="text-align:left;font-size:12px;color:var(--text2);font-family:monospace;">${r.ORDER_ID || '—'}</td>
       <td style="text-align:left;font-weight:700;font-size:13px;color:var(--text);">${r.SKU || '—'}</td>
       <td style="text-align:right;"><span style="font-size:11px;font-weight:600;color:${platColor};background:${platBg};padding:2px 8px;border-radius:6px;">${plat || '—'}</span></td>
+      <td style="text-align:right;">${dsBadge}</td>
+      <td style="text-align:right;">${dsFeeCell}</td>
       <td style="text-align:right;font-size:12px;color:var(--text2);">${String(r.ORDER_DATE || '—').slice(0, 10)}</td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${Math.round(Number(r.QTY) || 0).toLocaleString()}</span></td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmt(Number(r.PRODUCT_SALES) || 0)}</span></td>

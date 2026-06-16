@@ -459,6 +459,15 @@
             <option value="">All Dates</option>
           </select>
         </div>
+        <!-- Drop Ship filter -->
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:12px;color:var(--text3);">Drop Ship</span>
+          <select id="orderDetailDropship" class="ctrl-sel" onchange="renderOrderDetailPage()">
+            <option value="">All</option>
+            <option value="yes">Drop Ship Only</option>
+            <option value="no">Non-Drop Ship Only</option>
+          </select>
+        </div>
         <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
         <!-- Sort -->
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -503,6 +512,8 @@
                 <th style="text-align:left;min-width:190px;">Order ID</th>
                 <th style="text-align:left;min-width:130px;">SKU</th>
                 <th style="min-width:90px;">Platform</th>
+                <th style="min-width:100px;">Drop Ship</th>
+                <th style="min-width:110px;">DS Fee</th>
                 <th style="min-width:100px;">Order Date</th>
                 <th style="min-width:70px;">Qty</th>
                 <th style="min-width:120px;">Product Sales</th>
@@ -512,7 +523,7 @@
               </tr>
             </thead>
             <tbody id="orderDetailBody">
-              <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3);">Loading…</td></tr>
+              <tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text3);">Loading…</td></tr>
             </tbody>
           </table>
         </div>
