@@ -610,14 +610,14 @@
     <section id="inventorySection" style="display:none;">
       <!-- Sticky controls -->
       <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:57px;z-index:25;">
-        <!-- ── Row 1: View toggle + filters (Channel/Status or Warehouse/Priority) ── -->
+        <!-- ── Row 1: View toggle + filters + sort + search (everything in one line) ── -->
         <div class="toggle-group" id="inventoryToggle">
           <button class="toggle-btn active" onclick="setInventoryView('forecast',this)">Forecast</button>
           <button class="toggle-btn" onclick="setInventoryView('aging',this)">Slow Traffic</button>
         </div>
         <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
 
-        <!-- Forecast filters -->
+        <!-- Forecast: Channel + Status + Sort + Direction + Search -->
         <div class="forecast-only" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-size:12px;color:var(--text3);">Channel</span>
           <select id="forecastChannel" class="ctrl-sel" onchange="renderInventoryPage()">
@@ -626,7 +626,6 @@
             <option value="amazon_nonfba">Amazon Non-FBA</option>
             <option value="shopify">Shopify</option>
           </select>
-          <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
           <span style="font-size:12px;color:var(--text3);">Status</span>
           <select id="forecastStatus" class="ctrl-sel" onchange="renderInventoryPage()">
             <option value="">All</option>
@@ -635,32 +634,7 @@
             <option value="Sufficient">Sufficient</option>
             <option value="threshold">Threshold met (Y)</option>
           </select>
-        </div>
-
-        <!-- Aging filters -->
-        <div class="aging-only" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-size:12px;color:var(--text3);">Warehouse</span>
-          <select id="agingChannel" class="ctrl-sel" onchange="renderInventoryPage()">
-            <option value="">All</option>
-            <option value="amazon_fba">Amazon FBA</option>
-            <option value="hooves_and_paws">Hooves and Paws</option>
-          </select>
           <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
-          <span style="font-size:12px;color:var(--text3);">Priority</span>
-          <select id="agingPriority" class="ctrl-sel" onchange="renderInventoryPage()">
-            <option value="">All Tiers</option>
-            <option value="1">1. Warning (61–90d)</option>
-            <option value="2">2. Review (91–180d)</option>
-            <option value="3">3. Discontinue Candidate (181–365d)</option>
-            <option value="4">4. Definitely Discontinue (&gt;365d)</option>
-          </select>
-        </div>
-
-        <!-- Force line break so the next group starts on a new row -->
-        <div style="flex-basis:100%;height:0;"></div>
-
-        <!-- ── Row 2: Sort + Search + CSV download ── -->
-        <div class="forecast-only" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-size:12px;color:var(--text3);">Sort</span>
           <select id="forecastSort" class="ctrl-sel" onchange="renderInventoryPage()">
             <option value="restock_needed">Restock Needed</option>
@@ -686,7 +660,23 @@
           </div>
         </div>
 
+        <!-- Aging: Warehouse + Priority + Sort + Direction + Search -->
         <div class="aging-only" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:12px;color:var(--text3);">Warehouse</span>
+          <select id="agingChannel" class="ctrl-sel" onchange="renderInventoryPage()">
+            <option value="">All</option>
+            <option value="amazon_fba">Amazon FBA</option>
+            <option value="hooves_and_paws">Hooves and Paws</option>
+          </select>
+          <span style="font-size:12px;color:var(--text3);">Priority</span>
+          <select id="agingPriority" class="ctrl-sel" onchange="renderInventoryPage()">
+            <option value="">All Tiers</option>
+            <option value="1">1. Warning (61–90d)</option>
+            <option value="2">2. Review (91–180d)</option>
+            <option value="3">3. Discontinue Candidate (181–365d)</option>
+            <option value="4">4. Definitely Discontinue (&gt;365d)</option>
+          </select>
+          <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
           <span style="font-size:12px;color:var(--text3);">Sort</span>
           <select id="agingSort" class="ctrl-sel" onchange="renderInventoryPage()">
             <option value="days_since_last_order">Days Since Last Order</option>
@@ -705,7 +695,11 @@
           </div>
         </div>
 
-        <!-- CSV download (right side of row 2) -->
+        <!-- Force line break before the bottom row -->
+        <div style="flex-basis:100%;height:0;"></div>
+
+        <!-- ── Row 2: Meta info (left) + CSV download (right) ── -->
+        <div id="inventoryMeta" style="font-size:11px;color:var(--text3);"></div>
         <div class="dl-wrap" style="margin-left:auto;">
           <button id="inventoryDlBtn" class="dl-btn" onclick="downloadInventoryCSV()" title="Download the currently selected inventory view (matches Channel/Status or Warehouse/Priority filters)">
             <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
@@ -713,9 +707,6 @@
           </button>
           <span class="dl-hint" id="inventoryDlHint"></span>
         </div>
-
-        <!-- ── Row 3: Meta info (full-width, left-aligned) ── -->
-        <div id="inventoryMeta" class="toolbar-note"></div>
       </div>
 
       <!-- Table -->
