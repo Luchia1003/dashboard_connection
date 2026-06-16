@@ -87,6 +87,7 @@ window.loadOrderDetailData = loadOrderDetailData;
 
 function renderOrderDetailPage() {
   if (!S.orderDetail) { loadOrderDetailData(); return; }
+  if (typeof updateDownloadHints === 'function') updateDownloadHints();
 
   const sortBy    = (document.getElementById('orderDetailSort') || {}).value || 'order_date';
   const sortDir   = (document.getElementById('orderDetailDir')  || {}).value || 'desc';

@@ -46,8 +46,6 @@ function setInventoryView(view, btn) {
   btn.classList.add('active');
   document.getElementById('forecastControls').style.display = view === 'forecast' ? 'flex' : 'none';
   document.getElementById('agingControls').style.display    = view === 'aging'    ? 'flex' : 'none';
-  const dlLabel = document.getElementById('inventoryDlLabel');
-  if (dlLabel) dlLabel.textContent = view === 'forecast' ? 'CSV · Forecast' : 'CSV · Slow Traffic';
   renderInventoryPage();
 }
 window.setInventoryView = setInventoryView;
@@ -59,6 +57,7 @@ function renderInventoryPage() {
   const view = S.inventoryView || 'forecast';
   if (view === 'forecast') renderForecastTable();
   else renderAgingTable();
+  if (typeof updateDownloadHints === 'function') updateDownloadHints();
 }
 window.renderInventoryPage = renderInventoryPage;
 

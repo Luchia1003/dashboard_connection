@@ -210,6 +210,99 @@ window.downloadOrderDetailCSV = downloadOrderDetailCSV;
 window.downloadCouponCSV      = downloadCouponCSV;
 window.downloadInventoryCSV   = downloadInventoryCSV;
 
+// ── Download hints ────────────────────────────────────────────────────────────
+// Renders a small text next to each CSV button summarising what will be
+// downloaded given the currently active filters / toggles.
+
+const PLATFORM_LABEL = { all: 'All Platforms', amazon: 'Amazon', shopify: 'Shopify' };
+const MODE_LABEL     = { net: 'Net', order: 'Order', refund: 'Refund' };
+const FCST_CHANNEL_LABEL = {
+  total: 'Total (Non-FBA + Shopify)',
+  amazon_fba: 'Amazon FBA',
+  amazon_nonfba: 'Amazon Non-FBA',
+  shopify: 'Shopify',
+};
+const FCST_STATUS_LABEL = {
+  '': 'All statuses',
+  'Restock Needed': 'Restock Needed',
+  'Out of Stock':   'Out of Stock',
+  'Sufficient':     'Sufficient',
+  'threshold':      'Threshold met (Y)',
+};
+const AGING_WAREHOUSE_LABEL = {
+  '': 'All warehouses',
+  amazon_fba: 'Amazon FBA',
+  hooves_and_paws: 'Hooves and Paws',
+};
+const AGING_PRIORITY_LABEL = {
+  '': 'All tiers',
+  '1': 'Tier 1 (Warning)',
+  '2': 'Tier 2 (Review)',
+  '3': 'Tier 3 (Discontinue Candidate)',
+  '4': 'Tier 4 (Definitely Discontinue)',
+};
+const TR_LABEL = {
+  all: 'All time', yesterday: 'Yesterday',
+  thisWeek: 'This week', lastWeek: 'Last week',
+  thisMonth: 'This month', lastMonth: 'Last month',
+  last7: 'Last 7 days', last14: 'Last 14 days',
+  last30: 'Last 30 days', last90: 'Last 90 days',
+  thisYear: 'This year', lastYear: 'Last year',
+};
+
+function trDisplay() {
+  if (!S.tr) return 'All time';
+  if (TR_LABEL[S.tr]) return TR_LABEL[S.tr];
+  if (S.tr === 'custom') return (S.customFrom && S.customTo) ? `${S.customFrom} → ${S.customTo}` : 'All time';
+  if (S.tr.startsWith('m:')) return S.tr.slice(2);
+  return 'All time';
+}
+
+function platformDisplay() { return PLATFORM_LABEL[(S.platform || 'all').toLowerCase()] || 'All Platforms'; }
+
+function hintParts(parts) {
+  return parts.map(p => `<b>${p}</b>`).join('<span class="sep">·</span>');
+}
+
+function updateDownloadHints() {
+  // Product Detail → mode · platform · time range
+  const skuH = document.getElementById('skuDlHint');
+  if (skuH) {
+    const mode = MODE_LABEL[S.mode || 'net'];
+    skuH.innerHTML = 'Will download ' + hintParts([mode, platformDisplay(), trDisplay()]);
+  }
+
+  // Order Detail → platform · date
+  const odH = document.getElementById('orderDetailDlHint');
+  if (odH) {
+    const date = S.orderDetailDate || 'All dates';
+    odH.innerHTML = 'Will download ' + hintParts([platformDisplay(), date]);
+  }
+
+  // Coupon → SKU level / Order level
+  const cpH = document.getElementById('couponDlHint');
+  if (cpH) {
+    const view = (S.couponView === 'order') ? 'Order level' : 'SKU level';
+    cpH.innerHTML = 'Will download ' + hintParts([view]);
+  }
+
+  // Inventory → either Forecast (channel · status) or Slow Traffic (warehouse · priority)
+  const invH = document.getElementById('inventoryDlHint');
+  if (invH) {
+    if ((S.inventoryView || 'forecast') === 'forecast') {
+      const ch = (document.getElementById('forecastChannel') || {}).value || 'total';
+      const st = (document.getElementById('forecastStatus')  || {}).value || '';
+      invH.innerHTML = 'Will download ' + hintParts(['Forecast', FCST_CHANNEL_LABEL[ch] || ch, FCST_STATUS_LABEL[st] || st]);
+    } else {
+      const wh  = (document.getElementById('agingChannel')  || {}).value || '';
+      const pri = (document.getElementById('agingPriority') || {}).value || '';
+      invH.innerHTML = 'Will download ' + hintParts(['Slow Traffic', AGING_WAREHOUSE_LABEL[wh] || wh, AGING_PRIORITY_LABEL[pri] || pri]);
+    }
+  }
+}
+
+window.updateDownloadHints = updateDownloadHints;
+
 // ── Date Range ────────────────────────────────────────────────────────────────
 
 function toStr(d) { return d.toISOString().slice(0, 10); }
@@ -331,12 +424,13 @@ window.onCustomRange = onCustomRange;
 window.clearTR = clearTR;
 
 function rerender() {
-  if (S.page === 'coupon')       { renderCouponPage();      return; }
-  if (S.page === 'orderDetail')  { renderOrderDetailPage(); return; }
-  if (S.page === 'inventory')    { renderInventoryPage();   return; }
+  if (S.page === 'coupon')       { renderCouponPage();      updateDownloadHints(); return; }
+  if (S.page === 'orderDetail')  { renderOrderDetailPage(); updateDownloadHints(); return; }
+  if (S.page === 'inventory')    { renderInventoryPage();   updateDownloadHints(); return; }
   if (!S.daily || !S.sku) return;
   if (S.page === 'sales') renderSalesPage();
   else renderProductsPage();
+  updateDownloadHints();
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -375,6 +469,7 @@ function switchPage(page) {
     if (page === 'sales') renderSalesPage();
     else renderProductsPage();
   }
+  updateDownloadHints();
 }
 window.switchPage = switchPage;
 
@@ -420,6 +515,7 @@ function setMode(mode, btn) {
   document.querySelectorAll('#productsSection .toggle-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderProductsPage();
+  updateDownloadHints();
 }
 window.setMode = setMode;
 
@@ -470,6 +566,7 @@ async function init() {
 
     renderSalesPage();
     renderProductsPage();
+    updateDownloadHints();
 
   } catch (err) {
     console.error(err);
