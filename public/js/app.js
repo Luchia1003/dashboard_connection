@@ -264,26 +264,28 @@ function hintParts(parts) {
   return parts.map(p => `<b>${p}</b>`).join('<span class="sep">·</span>');
 }
 
+const HINT_PREFIX = 'Will download&nbsp;';
+
 function updateDownloadHints() {
   // Product Detail → mode · platform · time range
   const skuH = document.getElementById('skuDlHint');
   if (skuH) {
     const mode = MODE_LABEL[S.mode || 'net'];
-    skuH.innerHTML = 'Will download ' + hintParts([mode, platformDisplay(), trDisplay()]);
+    skuH.innerHTML = HINT_PREFIX + hintParts([mode, platformDisplay(), trDisplay()]);
   }
 
   // Order Detail → platform · date
   const odH = document.getElementById('orderDetailDlHint');
   if (odH) {
     const date = S.orderDetailDate || 'All dates';
-    odH.innerHTML = 'Will download ' + hintParts([platformDisplay(), date]);
+    odH.innerHTML = HINT_PREFIX + hintParts([platformDisplay(), date]);
   }
 
   // Coupon → SKU level / Order level
   const cpH = document.getElementById('couponDlHint');
   if (cpH) {
     const view = (S.couponView === 'order') ? 'Order level' : 'SKU level';
-    cpH.innerHTML = 'Will download ' + hintParts([view]);
+    cpH.innerHTML = HINT_PREFIX + hintParts([view]);
   }
 
   // Inventory → either Forecast (channel · status) or Slow Traffic (warehouse · priority)
@@ -292,11 +294,11 @@ function updateDownloadHints() {
     if ((S.inventoryView || 'forecast') === 'forecast') {
       const ch = (document.getElementById('forecastChannel') || {}).value || 'total';
       const st = (document.getElementById('forecastStatus')  || {}).value || '';
-      invH.innerHTML = 'Will download ' + hintParts(['Forecast', FCST_CHANNEL_LABEL[ch] || ch, FCST_STATUS_LABEL[st] || st]);
+      invH.innerHTML = HINT_PREFIX + hintParts(['Forecast', FCST_CHANNEL_LABEL[ch] || ch, FCST_STATUS_LABEL[st] || st]);
     } else {
       const wh  = (document.getElementById('agingChannel')  || {}).value || '';
       const pri = (document.getElementById('agingPriority') || {}).value || '';
-      invH.innerHTML = 'Will download ' + hintParts(['Slow Traffic', AGING_WAREHOUSE_LABEL[wh] || wh, AGING_PRIORITY_LABEL[pri] || pri]);
+      invH.innerHTML = HINT_PREFIX + hintParts(['Slow Traffic', AGING_WAREHOUSE_LABEL[wh] || wh, AGING_PRIORITY_LABEL[pri] || pri]);
     }
   }
 }
