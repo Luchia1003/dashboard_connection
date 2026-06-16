@@ -264,7 +264,7 @@ function hintParts(parts) {
   return parts.map(p => `<b>${p}</b>`).join('<span class="sep">·</span>');
 }
 
-const HINT_PREFIX = 'Will download&nbsp;';
+const HINT_PREFIX = 'Will download:&nbsp;';
 
 function updateDownloadHints() {
   // Product Detail → mode · platform · time range

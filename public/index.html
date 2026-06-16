@@ -70,13 +70,22 @@
 
     .dl-hint {
       font-size: 11px; color: #0ea5e9; white-space: nowrap;
-      display: block; text-align: right; line-height: 1.2;
+      display: block; text-align: center; line-height: 1.2;
     }
     .dl-hint b   { color: #0284c7; font-weight: 700; }
     .dl-hint .sep { margin: 0 5px; opacity: .55; }
     .dl-wrap {
-      display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+      display: inline-flex; flex-direction: column; align-items: center;
+      gap: 6px; padding: 7px 11px;
+      border: 1px solid rgba(14,165,233,.35);
+      border-radius: 9px;
+      background: rgba(14,165,233,.06);
     }
+    .toolbar-note {
+      flex-basis: 100%; text-align: left;
+      font-size: 11px; color: var(--text3); line-height: 1.55;
+    }
+    .toolbar-note b { color: var(--text2); }
 
     .ctrl-sel, .ctrl-inp {
       background: var(--input); border: 1px solid var(--border); color: var(--text);
@@ -375,19 +384,18 @@
           <input id="skuSearch" type="text" class="ctrl-inp" placeholder="Search SKU…" style="width:140px;" oninput="renderProductsPage()" />
           <button id="skuSearchClear" onclick="clearSkuSearch()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px;" title="Clear">✕</button>
         </div>
-        <!-- Right cluster: methodology legend + download -->
-        <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
-          <div style="font-size:10px;color:var(--text3);line-height:1.6;text-align:right;border-left:1px solid var(--border);padding-left:12px;">
-            <div><b style="color:var(--text2);">Rolling:</b> 7d &amp; 14d vs prev 30d avg · 30d vs prev 60d avg</div>
-            <div><b style="color:var(--text2);">Return Rate:</b> refund qty ÷ order qty (last 30d) · <span style="color:#ef4444;">⚠ Abnormal</span> = last30d &gt; hist×1.5 · <span style="color:#f59e0b;">High</span> = last30d &gt; 10%</div>
-          </div>
-          <div class="dl-wrap">
-            <button class="dl-btn" onclick="downloadSkuCSV()" title="Download Product Detail (matches current Time Range, Platform, and Net/Order/Refund)">
-              <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-              CSV
-            </button>
-            <span class="dl-hint" id="skuDlHint"></span>
-          </div>
+        <!-- CSV download (right side) -->
+        <div class="dl-wrap" style="margin-left:auto;">
+          <button class="dl-btn" onclick="downloadSkuCSV()" title="Download Product Detail (matches current Time Range, Platform, and Net/Order/Refund)">
+            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            CSV
+          </button>
+          <span class="dl-hint" id="skuDlHint"></span>
+        </div>
+        <!-- Methodology legend (full-width bottom row, left-aligned) -->
+        <div class="toolbar-note">
+          <div><b>Rolling:</b> 7d &amp; 14d vs prev 30d avg · 30d vs prev 60d avg</div>
+          <div><b>Return Rate:</b> refund qty ÷ order qty (last 30d) · <span style="color:#ef4444;">⚠ Abnormal</span> = last30d &gt; hist×1.5 · <span style="color:#f59e0b;">High</span> = last30d &gt; 10%</div>
         </div>
       </div>
 
@@ -456,16 +464,13 @@
           <input id="orderDetailSearch" type="text" class="ctrl-inp" placeholder="Search Order ID / SKU…" style="width:180px;" oninput="renderOrderDetailPage()" />
           <button id="orderDetailSearchClear" onclick="clearOrderDetailSearch()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px;" title="Clear">✕</button>
         </div>
-        <!-- Right cluster: info + download -->
-        <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
-          <span style="font-size:11px;color:var(--text3);">Last 5 days — not affected by time range</span>
-          <div class="dl-wrap">
-            <button class="dl-btn" onclick="downloadOrderDetailCSV()" title="Download Order Detail (matches current Platform and Date filter)">
-              <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-              CSV
-            </button>
-            <span class="dl-hint" id="orderDetailDlHint"></span>
-          </div>
+        <!-- CSV download (right side) -->
+        <div class="dl-wrap" style="margin-left:auto;">
+          <button class="dl-btn" onclick="downloadOrderDetailCSV()" title="Download Order Detail (matches current Platform and Date filter)">
+            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            CSV
+          </button>
+          <span class="dl-hint" id="orderDetailDlHint"></span>
         </div>
       </div>
 
@@ -670,17 +675,16 @@
           </div>
         </div>
 
-        <!-- Right-side meta + download -->
-        <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
-          <div id="inventoryMeta" style="font-size:11px;color:var(--text3);"></div>
-          <div class="dl-wrap">
-            <button id="inventoryDlBtn" class="dl-btn" onclick="downloadInventoryCSV()" title="Download the currently selected inventory view (matches Channel/Status or Warehouse/Priority filters)">
-              <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-              CSV
-            </button>
-            <span class="dl-hint" id="inventoryDlHint"></span>
-          </div>
+        <!-- CSV download (right side) -->
+        <div class="dl-wrap" style="margin-left:auto;">
+          <button id="inventoryDlBtn" class="dl-btn" onclick="downloadInventoryCSV()" title="Download the currently selected inventory view (matches Channel/Status or Warehouse/Priority filters)">
+            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            CSV
+          </button>
+          <span class="dl-hint" id="inventoryDlHint"></span>
         </div>
+        <!-- Meta info (full-width bottom row, left-aligned) -->
+        <div id="inventoryMeta" class="toolbar-note"></div>
       </div>
 
       <!-- Table -->
