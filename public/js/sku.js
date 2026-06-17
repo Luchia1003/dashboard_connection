@@ -121,6 +121,16 @@ function fmtExact(v, type) {
 
 // ── SKU Search clear helper ───────────────────────────────────────────────────
 
+// Toggle the custom-N input when "Custom…" is picked, then re-render.
+function onTopChange() {
+  const sel = document.getElementById('topSel');
+  const inp = document.getElementById('topCustom');
+  if (inp) inp.style.display = (sel && sel.value === 'custom') ? '' : 'none';
+  if (sel && sel.value === 'custom' && inp && !inp.value) { inp.focus(); return; }
+  renderProductsPage();
+}
+window.onTopChange = onTopChange;
+
 function clearSkuSearch() {
   const inp = document.getElementById('skuSearch');
   if (inp) { inp.value = ''; }
@@ -136,7 +146,18 @@ function renderSKUTable(filteredData, fullData) {
   const metric = (document.getElementById('sortMetric') || {}).value || 'revenue';
   const period = (document.getElementById('sortPeriod') || {}).value || 'total';
   const dir    = (document.getElementById('sortDir')    || {}).value || 'desc';
-  const topN   = parseInt(document.getElementById('topSel').value);
+
+  // "Show" supports fixed counts, All, and a free-form custom N.
+  const topRaw = (document.getElementById('topSel') || {}).value || '100';
+  let topN;
+  if (topRaw === 'all') {
+    topN = Infinity;
+  } else if (topRaw === 'custom') {
+    const c = parseInt((document.getElementById('topCustom') || {}).value, 10);
+    topN = (c && c > 0) ? c : Infinity;
+  } else {
+    topN = parseInt(topRaw, 10) || 100;
+  }
 
   const searchRaw = (document.getElementById('skuSearch') || {}).value || '';
   const query = searchRaw.trim().toLowerCase();
