@@ -201,34 +201,69 @@
     .ac-chip-count { font-size:15px; font-weight:800; color:var(--text); }
     .ac-chip-desc { font-size:11px; color:var(--text2); line-height:1.35; margin-top:3px; }
 
-    .ac-row {
-      display: grid; grid-template-columns: 110px 1fr auto; gap: 14px; align-items: center;
-      padding: 13px 16px; border-bottom: 1px solid var(--sep);
-    }
+    .ac-row { border-bottom: 1px solid var(--sep); padding: 14px 16px; }
     .ac-row:last-child { border-bottom: none; }
     .ac-row:hover { background: var(--row-hover); }
-    .ac-ident { min-width: 0; }
+
+    /* Order-level: two rows — top = data (Order ID + metrics + profit),
+       bottom = insight (SKU + platform + flags). */
+    .ac-orow {
+      display: grid; align-items: center;
+      grid-template-columns: 84px minmax(180px,250px) 1fr auto;
+      grid-template-areas: "badge orderid metrics profit" "badge sku flags profit";
+      column-gap: 22px; row-gap: 5px;
+    }
+    .ac-a-badge   { grid-area: badge; align-self: center; }
+    .ac-a-orderid { grid-area: orderid; }
+    .ac-a-sku     { grid-area: sku; }
+    .ac-a-metrics { grid-area: metrics; }
+    .ac-a-flags   { grid-area: flags; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .ac-a-profit  { grid-area: profit; align-self: center; text-align:right; white-space:nowrap; }
+
+    /* SKU-level: single row — SKU + platform | metrics | dual profit. */
+    .ac-srow {
+      display: grid; align-items: center;
+      grid-template-columns: 84px minmax(150px,210px) 1fr auto;
+      grid-template-areas: "badge ident metrics profit";
+      column-gap: 22px;
+    }
+    .ac-s-ident  { grid-area: ident; }
+    .ac-s-metrics{ grid-area: metrics; }
+    .ac-s-profit { grid-area: profit; text-align:right; white-space:nowrap; }
+
     .ac-orderid { font-weight:700; font-size:14px; color:var(--text); font-family:monospace; word-break:break-all; }
     .ac-skubig  { font-weight:700; font-size:15px; color:var(--text); }
-    .ac-subline { font-size:12px; color:var(--text2); margin-top:2px; }
-    .ac-metrics { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:7px; }
-    .ac-metric  { font-size:12px; color:var(--text2); white-space:nowrap; }
-    .ac-metric-l{ color:var(--text3); }
-    .ac-metric-v{ font-weight:700; color:var(--text); }
+    .ac-skusmall{ font-weight:600; font-size:13px; color:var(--text2); }
+
+    /* Metric stat blocks */
+    .ac-metrics { display:flex; flex-wrap:wrap; gap:8px 18px; }
+    .ac-m { min-width:0; }
+    .ac-m-l { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:.03em; }
+    .ac-m-v { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; }
+    .ac-dual { font-size:12px; font-weight:700; white-space:nowrap; }
+    .ac-dual .ac-d-tag { font-size:9px; font-weight:600; color:var(--text3); text-transform:uppercase; }
+
     .ac-missing {
-      font-size:10px; font-weight:600; color:#f59e0b; background:rgba(245,158,11,.14);
-      padding:1px 7px; border-radius:5px; white-space:nowrap;
+      font-size:10px; font-weight:700; color:#ef4444; background:rgba(239,68,68,.12);
+      border:1px solid rgba(239,68,68,.32); padding:1px 7px; border-radius:5px; white-space:nowrap;
     }
-    .ac-nums { text-align: right; white-space: nowrap; }
-    .ac-loss { font-size: 16px; font-weight: 800; color: #ef4444; }
+    .ac-plabel { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:.03em; }
+    .ac-loss { font-size: 17px; font-weight: 800; color: #ef4444; }
     .ac-explain { font-size: 13px; font-weight: 700; color: var(--text); margin-top: 4px; }
+    .ac-prow { display:flex; align-items:baseline; justify-content:flex-end; gap:8px; }
+    .ac-prow + .ac-prow { margin-top:5px; }
+    .ac-pval { font-size:14px; font-weight:800; }
+    .ac-pval.big { font-size:17px; }
     .ac-plat { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 5px; }
     .ac-empty { padding: 28px 16px; text-align: center; color: var(--text3); font-size: 13px; }
     .ac-section-title {
       display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
       padding: 14px 16px; border-bottom: 1px solid var(--border);
     }
-    @media (max-width: 767px) { .ac-row { grid-template-columns: 1fr; gap: 6px; } .ac-nums { text-align: left; } }
+    @media (max-width: 767px) {
+      .ac-orow, .ac-srow { grid-template-columns: 1fr; grid-template-areas: "badge" "orderid" "sku" "ident" "metrics" "flags" "profit"; row-gap:6px; }
+      .ac-a-profit, .ac-s-profit { text-align:left; }
+    }
 
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: var(--bg); }

@@ -18,10 +18,10 @@ const AC = {
   CAUSE_PRIORITY: { PRICING: 3, DROPSHIP: 2, COUPON: 2, RETURN: 1 },
   CAUSE_CLASS:    { PRICING: 'ac-pricing', DROPSHIP: 'ac-dropship', COUPON: 'ac-coupon', RETURN: 'ac-return' },
   CAUSE_SUGGEST: {
-    PRICING:  'Loss before any fee → raise price / cut product',
+    PRICING:  'Already negative before returns & fees → raise price / cut product',
     DROPSHIP: 'Dropship fee turned it negative → switch supplier / adjust price',
     COUPON:   'Coupon turned it negative → pause / adjust coupon',
-    RETURN:   'Returns turned it negative → check quality / listing / return reasons',
+    RETURN:   'Profitable before returns; returns sink it → check quality / listing / return reason',
   },
 };
 
@@ -157,32 +157,45 @@ function acSkuPricingReturn() {
     const platform = r.PLATFORM || '';
     const k = `${platform}|${sku}`;
     let g = groups.get(k);
-    if (!g) { g = { sku, platform, orderProfit: 0, netProfit: 0, netSales: 0, netMargin: 0, netQty: 0, unitCost: 0 }; groups.set(k, g); }
+    if (!g) {
+      g = { sku, platform, orderProfit: 0, netProfit: 0,
+            orderSales: 0, netSales: 0, orderMargin: 0, netMargin: 0,
+            orderQty: 0, netQty: 0, refundQty: 0, unitCost: 0 };
+      groups.set(k, g);
+    }
     g.orderProfit += acNum(r.ORDER_PROFIT);
     g.netProfit   += acNum(r.NET_PROFIT);
+    g.orderSales  += acNum(r.ORDER_PRODUCT_SALES);
     g.netSales    += acNum(r.NET_PRODUCT_SALES);
+    g.orderMargin += acNum(r.ORDER_MARGIN);
     g.netMargin   += acNum(r.NET_MARGIN);
+    g.orderQty    += acNum(r.ORDER_QUANTITY);
     g.netQty      += acNum(r.NET_QUANTITY);
+    g.refundQty   += acNum(r.REFUND_QUANTITY);
     if (!g.unitCost) g.unitCost = acNum(r.UNIT_COST);
   });
 
   const out = [];
   groups.forEach(g => {
-    let cause, profit, preFree;
-    if (g.orderProfit < 0) {            // loses money before returns → pricing
-      cause = 'PRICING'; profit = g.orderProfit; preFree = g.orderProfit;
-    } else if (g.netProfit < 0) {       // profitable pre-return, returns sink it
-      cause = 'RETURN';  profit = g.netProfit;   preFree = g.orderProfit;
-    } else {
-      return;
-    }
+    let cause;
+    if (g.orderProfit < 0)      cause = 'PRICING'; // negative before returns
+    else if (g.netProfit < 0)   cause = 'RETURN';  // returns sink an otherwise-profitable SKU
+    else return;
+
+    // Return rate = |refund qty| / order qty over the window (matches Product Detail).
+    const returnRate = g.orderQty ? Math.abs(g.refundQty) / g.orderQty : null;
+
     out.push({
       key: `sku:${g.platform}:${g.sku}`,
-      level: 'sku', cause,
+      level: 'sku', cause, skuKind: 'pr',
       sku: g.sku, platform: g.platform,
-      profit, preFreeProfit: preFree,
-      productSales: g.netSales, salesMargin: g.netMargin,
-      unitCost: g.unitCost, qty: g.netQty,
+      // headline value used for sorting = the cause-driving profit
+      profit: cause === 'PRICING' ? g.orderProfit : g.netProfit,
+      orderProfit: g.orderProfit, netProfit: g.netProfit,
+      orderSales: g.orderSales, netSales: g.netSales,
+      orderMargin: g.orderMargin, netMargin: g.netMargin,
+      orderQty: g.orderQty, netQty: g.netQty,
+      unitCost: g.unitCost, returnRate,
     });
   });
   return out;
@@ -211,7 +224,7 @@ function acSkuCoupon() {
     if (preCoupon < 0) return; // PRICING — left for 3a
     out.push({
       key: `sku::${g.sku}`, // no platform in this table
-      level: 'sku', cause: 'COUPON',
+      level: 'sku', cause: 'COUPON', skuKind: 'coupon',
       sku: g.sku, platform: '',
       profit: g.profit, preFreeProfit: preCoupon,
       productSales: g.productSales, salesMargin: g.margin,
@@ -256,54 +269,110 @@ function acCauseCounts(list) {
   return c;
 }
 
-// Inline metric chips shown in the middle of each row.
-function acMetrics(i) {
-  const chips = [];
-  const chip = (label, val, color) =>
-    `<span class="ac-metric"><span class="ac-metric-l">${label}</span> <span class="ac-metric-v"${color ? ` style="color:${color};"` : ''}>${val}</span></span>`;
-  if (i.productSales != null) chips.push(chip('Product Sales', fmt(i.productSales)));
-  if (i.salesMargin  != null) chips.push(chip('Sales Margin', fmt(i.salesMargin), i.salesMargin < 0 ? '#ef4444' : ''));
-  if (i.unitCost)             chips.push(chip('Unit Cost', fmt(i.unitCost)));
-  if (i.qty != null)          chips.push(chip('Qty', Math.round(i.qty).toLocaleString()));
-  if (i.dropshipFee)          chips.push(chip('DS Fee', fmt(i.dropshipFee), '#f59e0b'));
-  if (i.couponFee)            chips.push(chip('Coupon Fee', fmt(i.couponFee), '#a855f7'));
-  return chips.join('');
+// One metric stat block (label on top, value below).
+function acStat(label, valHtml) {
+  return `<div class="ac-m"><div class="ac-m-l">${label}</div><div class="ac-m-v">${valHtml}</div></div>`;
 }
+// Dual order/net value block, with the net figure coloured if negative.
+function acStatDual(label, orderVal, netVal) {
+  const netColor = netVal < 0 ? '#ef4444' : 'var(--text)';
+  const val = `<span class="ac-dual"><span class="ac-d-tag">order</span> ${fmt(orderVal)} &nbsp;<span class="ac-d-tag">net</span> <span style="color:${netColor};">${fmt(netVal)}</span></span>`;
+  return acStat(label, val);
+}
+function acColor(v) { return v < 0 ? '#ef4444' : 'var(--text)'; }
 
-function acRow(i) {
-  // Attribution line — only for non-PRICING causes (PRICING is self-evident from
-  // the board title). Emphasised so the "why" stands out.
+// ── Order level row: data on top, insight below ───────────────────────────────
+function acOrderRow(i) {
+  const metrics = [
+    acStat('Product Sales', fmt(i.productSales)),
+    acStat('Sales Margin', `<span style="color:${acColor(i.salesMargin)};">${fmt(i.salesMargin)}</span>`),
+    acStat('Unit Cost', fmt(i.unitCost)),
+    acStat('Qty', Math.round(i.qty || 0).toLocaleString()),
+    i.dropshipFee ? acStat('DS Fee', `<span style="color:#f59e0b;">${fmt(i.dropshipFee)}</span>`) : '',
+    i.couponFee   ? acStat('Coupon Fee', `<span style="color:#a855f7;">${fmt(i.couponFee)}</span>`) : '',
+  ].join('');
+
+  // Attribution line — only for non-PRICING (PRICING is self-evident from the title).
   let explain = '';
   if (i.cause === 'DROPSHIP') explain = `pre-dropship ${fmt(i.preFreeProfit)} · DS fee ${fmt(i.dropshipFee)}`;
   else if (i.cause === 'COUPON') explain = `pre-coupon ${fmt(i.preFreeProfit)} · coupon ${fmt(i.couponFee)}`;
-  else if (i.cause === 'RETURN') explain = `pre-return ${fmt(i.preFreeProfit)}`;
 
-  // Order level → Order ID is the headline (used to search on Amazon/Shopify),
-  // SKU sits underneath. SKU level → SKU is the headline.
-  const platPill = acPlatPill(i.platform);
-  const ident = i.level === 'order'
-    ? `<div class="ac-orderid">${i.orderId || '—'}</div>
-       <div class="ac-subline">${i.sku || '—'} ${platPill}</div>`
-    : `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-         <span class="ac-skubig">${i.sku || '—'}</span>${platPill}
-       </div>`;
-
-  // Flag order rows that have $0 product sales — likely missing data, not a real loss.
-  const missing = (i.level === 'order' && !i.productSales)
+  const missing = !i.productSales
     ? `<span class="ac-missing">⚠ possibly missing data</span>` : '';
 
   return `
-    <div class="ac-row">
-      <div><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></div>
-      <div class="ac-ident">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${ident}${missing}</div>
-        <div class="ac-metrics">${acMetrics(i)}</div>
-      </div>
-      <div class="ac-nums">
+    <div class="ac-row ac-orow">
+      <div class="ac-a-badge"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></div>
+      <div class="ac-a-orderid ac-orderid">${i.orderId || '—'}</div>
+      <div class="ac-a-sku ac-skusmall">${i.sku || '—'}</div>
+      <div class="ac-a-metrics ac-metrics">${metrics}</div>
+      <div class="ac-a-flags">${acPlatPill(i.platform)}${missing}</div>
+      <div class="ac-a-profit">
+        <div class="ac-plabel">Profit</div>
         <div class="ac-loss">${fmt(i.profit)}</div>
         ${explain ? `<div class="ac-explain">${explain}</div>` : ''}
       </div>
     </div>`;
+}
+
+// ── SKU level (PRICING / RETURN): order + net everywhere, dual profit ─────────
+function acSkuPRRow(i) {
+  const metrics = [
+    acStatDual('Product Sales', i.orderSales, i.netSales),
+    acStatDual('Sales Margin', i.orderMargin, i.netMargin),
+    acStat('Unit Cost', fmt(i.unitCost)),
+    acStatDual('Qty', Math.round(i.orderQty || 0).toLocaleString(), Math.round(i.netQty || 0).toLocaleString()),
+    acStat('Return Rate', i.returnRate != null
+      ? `<span style="color:${i.returnRate > 0.10 ? '#f59e0b' : 'var(--text)'};">${fmt(i.returnRate, 'pct')}</span>` : '—'),
+  ].join('');
+
+  return `
+    <div class="ac-row ac-srow">
+      <div class="ac-a-badge"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></div>
+      <div class="ac-s-ident">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span class="ac-skubig">${i.sku || '—'}</span>${acPlatPill(i.platform)}
+        </div>
+      </div>
+      <div class="ac-s-metrics ac-metrics">${metrics}</div>
+      <div class="ac-s-profit">
+        <div class="ac-prow"><span class="ac-plabel">Order Profit · pre-return</span><span class="ac-pval" style="color:${acColor(i.orderProfit)};">${fmt(i.orderProfit)}</span></div>
+        <div class="ac-prow"><span class="ac-plabel">Net Profit · after return</span><span class="ac-pval big" style="color:${acColor(i.netProfit)};">${fmt(i.netProfit)}</span></div>
+      </div>
+    </div>`;
+}
+
+// ── SKU level (COUPON): single totals + coupon fee ───────────────────────────
+function acSkuCouponRow(i) {
+  const metrics = [
+    acStat('Product Sales', fmt(i.productSales)),
+    acStat('Margin', `<span style="color:${acColor(i.salesMargin)};">${fmt(i.salesMargin)}</span>`),
+    acStat('Unit Cost', fmt(i.unitCost)),
+    acStat('Qty', Math.round(i.qty || 0).toLocaleString()),
+    acStat('Coupon Fee', `<span style="color:#a855f7;">${fmt(i.couponFee)}</span>`),
+  ].join('');
+
+  return `
+    <div class="ac-row ac-srow">
+      <div class="ac-a-badge"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></div>
+      <div class="ac-s-ident">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span class="ac-skubig">${i.sku || '—'}</span>${acPlatPill(i.platform)}
+        </div>
+      </div>
+      <div class="ac-s-metrics ac-metrics">${metrics}</div>
+      <div class="ac-s-profit">
+        <div class="ac-plabel">Profit</div>
+        <div class="ac-loss">${fmt(i.profit)}</div>
+        <div class="ac-explain">pre-coupon ${fmt(i.preFreeProfit)} · coupon ${fmt(i.couponFee)}</div>
+      </div>
+    </div>`;
+}
+
+function acRow(i) {
+  if (i.level === 'order') return acOrderRow(i);
+  if (i.skuKind === 'coupon') return acSkuCouponRow(i);
+  return acSkuPRRow(i);
 }
 
 // Clickable legend = filter chips + explanation of what each cause means.
