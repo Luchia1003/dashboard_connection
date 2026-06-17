@@ -430,6 +430,7 @@ window.onCustomRange = onCustomRange;
 window.clearTR = clearTR;
 
 function rerender() {
+  if (S.page === 'action')       { renderActionCenterPage(); return; }
   if (S.page === 'coupon')       { renderCouponPage();      updateDownloadHints(); return; }
   if (S.page === 'orderDetail')  { renderOrderDetailPage(); updateDownloadHints(); return; }
   if (S.page === 'inventory')    { renderInventoryPage();   updateDownloadHints(); return; }
@@ -448,20 +449,24 @@ function switchPage(page) {
   document.getElementById('orderDetailSection').style.display = page === 'orderDetail' ? 'block' : 'none';
   document.getElementById('couponSection').style.display      = page === 'coupon'      ? 'block' : 'none';
   document.getElementById('inventorySection').style.display   = page === 'inventory'   ? 'block' : 'none';
+  document.getElementById('actionSection').style.display      = page === 'action'      ? 'block' : 'none';
   document.getElementById('navSales').classList.toggle('active',       page === 'sales');
   document.getElementById('navProducts').classList.toggle('active',    page === 'products');
   document.getElementById('navOrderDetail').classList.toggle('active', page === 'orderDetail');
   document.getElementById('navCoupon').classList.toggle('active',      page === 'coupon');
   document.getElementById('navInventory').classList.toggle('active',   page === 'inventory');
+  document.getElementById('navAction').classList.toggle('active',      page === 'action');
   const titles = {
     sales: 'Sales Dashboard',
     products: 'Product Detail',
     orderDetail: 'Order Detail',
     coupon: 'Coupon Order',
     inventory: 'Inventory',
+    action: 'Action Center',
   };
   document.getElementById('pageTitle').textContent = titles[page] || 'Dashboard';
   // Inventory / Coupon / Order Detail have their own internal filters and don't use the global time range.
+  // Action Center keeps the topbar Time Range because its SKU-level insights follow it.
   const hideTopbar = page === 'coupon' || page === 'orderDetail' || page === 'inventory';
   document.getElementById('trControls').style.display = hideTopbar ? 'none' : 'flex';
   closeNavMenu();
@@ -471,6 +476,8 @@ function switchPage(page) {
     loadOrderDetailData();
   } else if (page === 'inventory') {
     loadInventoryData();
+  } else if (page === 'action') {
+    loadActionCenterData();
   } else if (S.daily && S.sku) {
     if (page === 'sales') renderSalesPage();
     else renderProductsPage();
