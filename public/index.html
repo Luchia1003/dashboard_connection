@@ -172,29 +172,61 @@
     .ac-dropship { background: rgba(245,158,11,.15); color:#f59e0b; border:1px solid rgba(245,158,11,.3); }
     .ac-coupon   { background: rgba(168,85,247,.15); color:#a855f7; border:1px solid rgba(168,85,247,.3); }
     .ac-return   { background: rgba(14,165,233,.15); color:#0ea5e9; border:1px solid rgba(14,165,233,.3); }
+
+    /* Level toggle (Order / SKU) — reuses toggle-group look */
+    .ac-level-toggle { display:inline-flex; background:var(--input); border-radius:9px; padding:4px; gap:3px; }
+    .ac-level-btn {
+      padding:7px 18px; border-radius:7px; font-size:13px; font-weight:600;
+      cursor:pointer; transition:all .15s; color:var(--text2); border:none; background:transparent;
+      display:inline-flex; align-items:center; gap:7px;
+    }
+    .ac-level-btn .ac-lvl-count {
+      font-size:11px; font-weight:700; padding:1px 7px; border-radius:10px;
+      background:var(--card); color:var(--text3);
+    }
+    .ac-level-btn.active { background:#0ea5e9; color:#fff; }
+    .ac-level-btn.active .ac-lvl-count { background:rgba(255,255,255,.25); color:#fff; }
+
+    /* Clickable cause legend = filter + explanation of each badge */
+    .ac-legend { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; }
+    .ac-filter-chip {
+      display:flex; align-items:flex-start; gap:9px; text-align:left;
+      padding:10px 12px; border-radius:10px; cursor:pointer;
+      border:1px solid var(--border); background:var(--input);
+      transition:all .15s; width:100%;
+    }
+    .ac-filter-chip:hover { border-color:#0ea5e9; }
+    .ac-filter-chip.active { border-color:#0ea5e9; background:rgba(14,165,233,.08); box-shadow:0 0 0 1px #0ea5e9 inset; }
+    .ac-filter-chip.dim { opacity:.45; }
+    .ac-chip-count { font-size:15px; font-weight:800; color:var(--text); }
+    .ac-chip-desc { font-size:11px; color:var(--text2); line-height:1.35; margin-top:3px; }
+
     .ac-row {
-      display: grid; grid-template-columns: 120px 1fr auto; gap: 14px; align-items: center;
-      padding: 12px 16px; border-bottom: 1px solid var(--sep);
+      display: grid; grid-template-columns: 110px 1fr auto; gap: 14px; align-items: center;
+      padding: 13px 16px; border-bottom: 1px solid var(--sep);
     }
     .ac-row:last-child { border-bottom: none; }
     .ac-row:hover { background: var(--row-hover); }
     .ac-ident { min-width: 0; }
-    .ac-sku { font-weight: 700; font-size: 14px; color: var(--text); }
-    .ac-meta { font-size: 11px; color: var(--text3); margin-top: 2px; font-family: monospace; word-break: break-all; }
-    .ac-suggest { font-size: 12px; color: var(--text2); margin-top: 3px; }
+    .ac-orderid { font-weight:700; font-size:14px; color:var(--text); font-family:monospace; word-break:break-all; }
+    .ac-skubig  { font-weight:700; font-size:15px; color:var(--text); }
+    .ac-subline { font-size:12px; color:var(--text2); margin-top:2px; }
+    .ac-metrics { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:7px; }
+    .ac-metric  { font-size:12px; color:var(--text2); white-space:nowrap; }
+    .ac-metric-l{ color:var(--text3); }
+    .ac-metric-v{ font-weight:700; color:var(--text); }
+    .ac-missing {
+      font-size:10px; font-weight:600; color:#f59e0b; background:rgba(245,158,11,.14);
+      padding:1px 7px; border-radius:5px; white-space:nowrap;
+    }
     .ac-nums { text-align: right; white-space: nowrap; }
-    .ac-loss { font-size: 15px; font-weight: 800; color: #ef4444; }
-    .ac-sub  { font-size: 11px; color: var(--text3); margin-top: 2px; }
+    .ac-loss { font-size: 16px; font-weight: 800; color: #ef4444; }
+    .ac-explain { font-size: 13px; font-weight: 700; color: var(--text); margin-top: 4px; }
     .ac-plat { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 5px; }
     .ac-empty { padding: 28px 16px; text-align: center; color: var(--text3); font-size: 13px; }
     .ac-section-title {
       display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
       padding: 14px 16px; border-bottom: 1px solid var(--border);
-    }
-    .ac-count-pill {
-      display: inline-flex; align-items: center; gap: 5px;
-      font-size: 11px; font-weight: 600; padding: 2px 9px;
-      border-radius: 20px; background: var(--input); color: var(--text2);
     }
     @media (max-width: 767px) { .ac-row { grid-template-columns: 1fr; gap: 6px; } .ac-nums { text-align: left; } }
 

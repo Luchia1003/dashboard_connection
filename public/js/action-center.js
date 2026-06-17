@@ -110,9 +110,8 @@ function acOrderPricingDropship() {
       level: 'order', cause,
       orderId: r.ORDER_ID, sku: r.SKU, platform: r.PLATFORM || '',
       profit, preFreeProfit: preFee,
-      dropshipFee: cause === 'DROPSHIP' ? dropshipFee : undefined,
-      qty,
-      windowNote: 'Recent orders · 5-day rolling',
+      productSales: acNum(r.PRODUCT_SALES),
+      salesMargin, unitCost, qty, dropshipFee,
     });
   });
   return out;
@@ -137,8 +136,9 @@ function acOrderCoupon() {
       level: 'order', cause: 'COUPON',
       orderId: r.ORDER_ID, sku: r.SKU, platform: r.PLATFORM || '',
       profit, preFreeProfit: preCoupon,
-      couponFee: acNum(r.COUPON_FEE), qty,
-      windowNote: 'Recent coupons · last 3 days',
+      productSales: acNum(r.PRODUCT_SALES),
+      salesMargin, unitCost, qty,
+      couponFee: acNum(r.COUPON_FEE),
     });
   });
   return out;
@@ -157,12 +157,15 @@ function acSkuPricingReturn() {
     const platform = r.PLATFORM || '';
     const k = `${platform}|${sku}`;
     let g = groups.get(k);
-    if (!g) { g = { sku, platform, orderProfit: 0, netProfit: 0 }; groups.set(k, g); }
+    if (!g) { g = { sku, platform, orderProfit: 0, netProfit: 0, netSales: 0, netMargin: 0, netQty: 0, unitCost: 0 }; groups.set(k, g); }
     g.orderProfit += acNum(r.ORDER_PROFIT);
     g.netProfit   += acNum(r.NET_PROFIT);
+    g.netSales    += acNum(r.NET_PRODUCT_SALES);
+    g.netMargin   += acNum(r.NET_MARGIN);
+    g.netQty      += acNum(r.NET_QUANTITY);
+    if (!g.unitCost) g.unitCost = acNum(r.UNIT_COST);
   });
 
-  const note = `Product Detail Time Range · ${typeof trDisplay === 'function' ? trDisplay() : 'All time'}`;
   const out = [];
   groups.forEach(g => {
     let cause, profit, preFree;
@@ -178,7 +181,8 @@ function acSkuPricingReturn() {
       level: 'sku', cause,
       sku: g.sku, platform: g.platform,
       profit, preFreeProfit: preFree,
-      windowNote: note,
+      productSales: g.netSales, salesMargin: g.netMargin,
+      unitCost: g.unitCost, qty: g.netQty,
     });
   });
   return out;
@@ -191,11 +195,12 @@ function acSkuCoupon() {
   (S.couponSku || []).forEach(r => {
     const sku = r.SKU || 'UNKNOWN';
     let g = groups.get(sku);
-    if (!g) { g = { sku, margin: 0, qty: 0, profit: 0, couponFee: 0, unitCost: acNum(r.UNIT_COST) }; groups.set(sku, g); }
-    g.margin    += acNum(r.TOTAL_MARGIN);
-    g.qty       += acNum(r.TOTAL_QUANTITY);
-    g.profit    += acNum(r.TOTAL_PROFIT);
-    g.couponFee += acNum(r.TOTAL_COUPON_FEE);
+    if (!g) { g = { sku, margin: 0, qty: 0, profit: 0, couponFee: 0, productSales: 0, unitCost: acNum(r.UNIT_COST) }; groups.set(sku, g); }
+    g.margin       += acNum(r.TOTAL_MARGIN);
+    g.qty          += acNum(r.TOTAL_QUANTITY);
+    g.profit       += acNum(r.TOTAL_PROFIT);
+    g.couponFee    += acNum(r.TOTAL_COUPON_FEE);
+    g.productSales += acNum(r.TOTAL_PRODUCT_SALES);
     if (!g.unitCost) g.unitCost = acNum(r.UNIT_COST);
   });
 
@@ -209,8 +214,8 @@ function acSkuCoupon() {
       level: 'sku', cause: 'COUPON',
       sku: g.sku, platform: '',
       profit: g.profit, preFreeProfit: preCoupon,
-      couponFee: g.couponFee, qty: g.qty,
-      windowNote: 'Recent coupons · last 3 days',
+      productSales: g.productSales, salesMargin: g.margin,
+      unitCost: g.unitCost, qty: g.qty, couponFee: g.couponFee,
     });
   });
   return out;
@@ -246,72 +251,90 @@ function acBuildInsights() {
 // ── Render ────────────────────────────────────────────────────────────────────
 
 function acCauseCounts(list) {
-  const c = { PRICING: 0, DROPSHIP: 0, COUPON: 0, RETURN: 0 };
+  const c = {};
   list.forEach(i => { c[i.cause] = (c[i.cause] || 0) + 1; });
   return c;
 }
 
-function acCountSummary(counts, causes) {
-  return causes
-    .filter(c => counts[c])
-    .map(c => `<span class="ac-count-pill"><span class="ac-cause-badge ${AC.CAUSE_CLASS[c]}">${c}</span> ${counts[c]}</span>`)
-    .join('');
+// Inline metric chips shown in the middle of each row.
+function acMetrics(i) {
+  const chips = [];
+  const chip = (label, val, color) =>
+    `<span class="ac-metric"><span class="ac-metric-l">${label}</span> <span class="ac-metric-v"${color ? ` style="color:${color};"` : ''}>${val}</span></span>`;
+  if (i.productSales != null) chips.push(chip('Product Sales', fmt(i.productSales)));
+  if (i.salesMargin  != null) chips.push(chip('Sales Margin', fmt(i.salesMargin), i.salesMargin < 0 ? '#ef4444' : ''));
+  if (i.unitCost)             chips.push(chip('Unit Cost', fmt(i.unitCost)));
+  if (i.qty != null)          chips.push(chip('Qty', Math.round(i.qty).toLocaleString()));
+  if (i.dropshipFee)          chips.push(chip('DS Fee', fmt(i.dropshipFee), '#f59e0b'));
+  if (i.couponFee)            chips.push(chip('Coupon Fee', fmt(i.couponFee), '#a855f7'));
+  return chips.join('');
 }
 
 function acRow(i) {
-  // Explain the attribution with the pre-fee figure.
+  // Attribution line — only for non-PRICING causes (PRICING is self-evident from
+  // the board title). Emphasised so the "why" stands out.
   let explain = '';
-  if (i.cause === 'DROPSHIP' && i.dropshipFee != null) {
-    explain = `pre-dropship ${fmt(i.preFreeProfit)} · DS fee ${fmt(i.dropshipFee)}`;
-  } else if (i.cause === 'COUPON' && i.couponFee != null) {
-    explain = `pre-coupon ${fmt(i.preFreeProfit)} · coupon ${fmt(i.couponFee)}`;
-  } else if (i.cause === 'RETURN') {
-    explain = `pre-return ${fmt(i.preFreeProfit)}`;
-  } else if (i.preFreeProfit != null) {
-    explain = `pre-fee ${fmt(i.preFreeProfit)}`;
-  }
+  if (i.cause === 'DROPSHIP') explain = `pre-dropship ${fmt(i.preFreeProfit)} · DS fee ${fmt(i.dropshipFee)}`;
+  else if (i.cause === 'COUPON') explain = `pre-coupon ${fmt(i.preFreeProfit)} · coupon ${fmt(i.couponFee)}`;
+  else if (i.cause === 'RETURN') explain = `pre-return ${fmt(i.preFreeProfit)}`;
+
+  // Order level → Order ID is the headline (used to search on Amazon/Shopify),
+  // SKU sits underneath. SKU level → SKU is the headline.
+  const platPill = acPlatPill(i.platform);
+  const ident = i.level === 'order'
+    ? `<div class="ac-orderid">${i.orderId || '—'}</div>
+       <div class="ac-subline">${i.sku || '—'} ${platPill}</div>`
+    : `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+         <span class="ac-skubig">${i.sku || '—'}</span>${platPill}
+       </div>`;
+
+  // Flag order rows that have $0 product sales — likely missing data, not a real loss.
+  const missing = (i.level === 'order' && !i.productSales)
+    ? `<span class="ac-missing">⚠ possibly missing data</span>` : '';
 
   return `
     <div class="ac-row">
       <div><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></div>
       <div class="ac-ident">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span class="ac-sku">${i.sku || '—'}</span>${acPlatPill(i.platform)}
-        </div>
-        ${i.orderId ? `<div class="ac-meta">${i.orderId}</div>` : ''}
-        <div class="ac-suggest">${AC.CAUSE_SUGGEST[i.cause]}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${ident}${missing}</div>
+        <div class="ac-metrics">${acMetrics(i)}</div>
       </div>
       <div class="ac-nums">
         <div class="ac-loss">${fmt(i.profit)}</div>
-        <div class="ac-sub">${explain}</div>
-        <div class="ac-sub">${i.windowNote}</div>
+        ${explain ? `<div class="ac-explain">${explain}</div>` : ''}
       </div>
     </div>`;
 }
 
-function acSubSection(title, subtitle, list, causeOrder) {
-  const counts = acCauseCounts(list);
-  // sort by cause priority, then by largest loss
-  const sorted = [...list].sort((a, b) => {
-    const pa = AC.CAUSE_PRIORITY[a.cause] || 0, pb = AC.CAUSE_PRIORITY[b.cause] || 0;
-    if (pa !== pb) return pb - pa;
-    return a.profit - b.profit; // most negative first
-  });
-  const body = sorted.length
-    ? sorted.map(acRow).join('')
-    : `<div class="ac-empty">No loss-making ${title.toLowerCase()} 🎉</div>`;
-  return `
-    <div class="card" style="overflow:hidden;margin-bottom:18px;">
-      <div class="ac-section-title">
-        <h3 style="font-size:15px;font-weight:700;color:var(--text);">${title}</h3>
-        <span style="font-size:12px;color:var(--text3);">${subtitle}</span>
-        <div style="flex:1;"></div>
-        <span style="font-size:13px;font-weight:700;color:${sorted.length ? '#ef4444' : 'var(--text3)'};">${sorted.length}</span>
-      </div>
-      ${sorted.length ? `<div style="padding:8px 16px;display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--sep);">${acCountSummary(counts, causeOrder)}</div>` : ''}
-      <div>${body}</div>
-    </div>`;
+// Clickable legend = filter chips + explanation of what each cause means.
+function acLegend(counts, causeOrder, active) {
+  return `<div class="ac-legend">` + causeOrder
+    .filter(c => counts[c])
+    .map(c => {
+      const cls = active && active !== c ? 'ac-filter-chip dim' : (active === c ? 'ac-filter-chip active' : 'ac-filter-chip');
+      return `
+        <button class="${cls}" onclick="acToggleCause('${c}')">
+          <span class="ac-cause-badge ${AC.CAUSE_CLASS[c]}">${c}</span>
+          <div style="min-width:0;">
+            <span class="ac-chip-count">${counts[c]}</span>
+            <div class="ac-chip-desc">${AC.CAUSE_SUGGEST[c]}</div>
+          </div>
+        </button>`;
+    }).join('') + `</div>`;
 }
+
+function acSetLevel(level) {
+  S.acLevel = level;
+  S.acCause = '';           // reset filter — causes differ between levels
+  renderActionCenterPage();
+}
+window.acSetLevel = acSetLevel;
+
+function acToggleCause(cause) {
+  S.acCause = (S.acCause === cause) ? '' : cause;
+  renderActionCenterPage();
+}
+window.acToggleCause = acToggleCause;
 
 function renderActionCenterPage() {
   const el = document.getElementById('actionBody');
@@ -323,38 +346,64 @@ function renderActionCenterPage() {
   const insights = acBuildInsights();
   const orderInsights = insights.filter(i => i.level === 'order');
   const skuInsights   = insights.filter(i => i.level === 'sku');
-  const counts = acCauseCounts(insights);
+
+  const level    = S.acLevel || 'order';
+  const fullList = level === 'order' ? orderInsights : skuInsights;
+  const counts   = acCauseCounts(fullList);
+  const causeOrder = level === 'order' ? ['PRICING', 'DROPSHIP', 'COUPON'] : ['PRICING', 'RETURN', 'COUPON'];
+
+  // Apply the active cause filter.
+  let list = S.acCause ? fullList.filter(i => i.cause === S.acCause) : fullList;
+  list = [...list].sort((a, b) => {
+    const pa = AC.CAUSE_PRIORITY[a.cause] || 0, pb = AC.CAUSE_PRIORITY[b.cause] || 0;
+    if (pa !== pb) return pb - pa;
+    return a.profit - b.profit; // most negative first
+  });
+
+  const subtitle = level === 'order'
+    ? 'Recent orders · 5-day rolling (dropship) · last 3 days (coupon)'
+    : `Follows Product Detail Time Range · ${typeof trDisplay === 'function' ? trDisplay() : 'All time'} (coupon: last 3 days)`;
 
   const header = `
-    <div class="card" style="padding:18px 20px;margin-bottom:18px;">
+    <div class="card" style="padding:18px 20px;margin-bottom:16px;">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:22px;">⚠️</span>
-          <div>
-            <div style="font-size:17px;font-weight:800;color:var(--text);">Profit &lt; 0</div>
-            <div style="font-size:12px;color:var(--text3);">Loss-making orders &amp; SKUs grouped by root cause</div>
-          </div>
+        <span style="font-size:22px;">⚠️</span>
+        <div>
+          <div style="font-size:18px;font-weight:800;color:var(--text);">Profit &lt; 0</div>
+          <div style="font-size:12px;color:var(--text3);">Loss-making orders &amp; SKUs grouped by root cause — click a card to filter</div>
         </div>
         <div style="flex:1;"></div>
-        <div style="text-align:right;">
-          <div style="font-size:26px;font-weight:800;color:#ef4444;line-height:1;">${insights.length}</div>
-          <div style="font-size:11px;color:var(--text3);">total insights</div>
+        <div class="ac-level-toggle">
+          <button class="ac-level-btn ${level === 'order' ? 'active' : ''}" onclick="acSetLevel('order')">
+            Order Level <span class="ac-lvl-count">${orderInsights.length}</span>
+          </button>
+          <button class="ac-level-btn ${level === 'sku' ? 'active' : ''}" onclick="acSetLevel('sku')">
+            SKU Level <span class="ac-lvl-count">${skuInsights.length}</span>
+          </button>
         </div>
       </div>
-      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
-        ${insights.length ? acCountSummary(counts, ['PRICING', 'DROPSHIP', 'COUPON', 'RETURN']) : '<span style="font-size:13px;color:var(--text3);">No losses detected in the current window 🎉</span>'}
+      <div style="margin-top:16px;">
+        ${Object.keys(counts).length
+          ? acLegend(counts, causeOrder, S.acCause)
+          : '<span style="font-size:13px;color:var(--text3);">No losses detected in this view 🎉</span>'}
       </div>
     </div>`;
 
-  const orderSec = acSubSection(
-    'Order Level', 'Recent orders · 5-day rolling (dropship) · last 3 days (coupon)',
-    orderInsights, ['PRICING', 'DROPSHIP', 'COUPON']
-  );
-  const skuSec = acSubSection(
-    'SKU Level', `Follows Product Detail Time Range · ${typeof trDisplay === 'function' ? trDisplay() : 'All time'} (coupon: last 3 days)`,
-    skuInsights, ['PRICING', 'RETURN', 'COUPON']
-  );
+  const body = list.length
+    ? list.map(acRow).join('')
+    : `<div class="ac-empty">${S.acCause ? `No ${S.acCause} ${level === 'order' ? 'orders' : 'SKUs'}` : `No loss-making ${level === 'order' ? 'orders' : 'SKUs'} 🎉`}</div>`;
 
-  el.innerHTML = header + orderSec + skuSec;
+  const section = `
+    <div class="card" style="overflow:hidden;">
+      <div class="ac-section-title">
+        <h3 style="font-size:15px;font-weight:700;color:var(--text);">${level === 'order' ? 'Order Level' : 'SKU Level'}</h3>
+        <span style="font-size:12px;color:var(--text3);">${subtitle}</span>
+        <div style="flex:1;"></div>
+        <span style="font-size:13px;font-weight:700;color:${list.length ? '#ef4444' : 'var(--text3)'};">${list.length}${S.acCause ? ` / ${fullList.length}` : ''}</span>
+      </div>
+      <div>${body}</div>
+    </div>`;
+
+  el.innerHTML = header + section;
 }
 window.renderActionCenterPage = renderActionCenterPage;

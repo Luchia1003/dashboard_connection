@@ -12,6 +12,8 @@ const S = {
   inventoryForecast: null,
   fbaAging: null,
   inventoryView: 'forecast',
+  acLevel: 'order',
+  acCause: '',
   page: 'sales',
   tr: 'all',
   customFrom: '',
