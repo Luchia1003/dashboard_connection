@@ -243,7 +243,8 @@ function renderSKUTable(filteredData, fullData) {
         </div>
         ${s.retAlert === 'danger' ? `<div style="margin-top:4px;"><span class="badge-down" style="font-size:9px;padding:1px 5px;border-radius:10px;">⚠ Abnormal</span></div>` : ''}
         ${s.retAlert === 'warn'   ? `<div style="margin-top:4px;"><span class="badge-surge" style="font-size:9px;padding:1px 5px;border-radius:10px;">High</span></div>` : ''}
-      </td>` : '<td></td>';
+      </td>` : '';  // emit no cell when hidden, so the header (returnHeader is
+                    // display:none in Order/Refund) and body stay column-aligned
 
     // Inventory — current snapshot per the active platform view (not time-range
     // dependent). Amazon / All show an FBA · warehouse split underneath.
