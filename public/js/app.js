@@ -10,6 +10,7 @@ const S = {
   couponView: 'sku',
   couponDate: '',
   inventoryForecast: null,
+  inventoryPool: null,
   fbaAging: null,
   inventoryView: 'forecast',
   acLevel: 'order',
@@ -607,7 +608,9 @@ window.setYoyMetric = setYoyMetric;
 
 async function init() {
   try {
-    const [dr, sr] = await Promise.all([fetch('/api/daily'), fetch('/api/sku')]);
+    const [dr, sr, ir] = await Promise.all([
+      fetch('/api/daily'), fetch('/api/sku'), fetch('/api/inventory-pool'),
+    ]);
     if (dr.status === 401 || sr.status === 401) { window.location.href = '/login.html'; return; }
     if (!dr.ok) throw new Error(`Daily API: HTTP ${dr.status}`);
     if (!sr.ok) throw new Error(`SKU API: HTTP ${sr.status}`);
@@ -616,6 +619,11 @@ async function init() {
     S.sku   = await sr.json();
 
     if (!Array.isArray(S.daily) || !Array.isArray(S.sku)) throw new Error('Invalid API response');
+
+    // Inventory pool is supplementary — never block the dashboard if it fails.
+    S.inventoryPool = ir && ir.ok ? await ir.json().catch(() => []) : [];
+    if (!Array.isArray(S.inventoryPool)) S.inventoryPool = [];
+    buildInventoryIndex();
 
     const lastDate = S.daily[S.daily.length - 1]?.DATE;
     document.getElementById('sidebarStatus').textContent = `Updated: ${lastDate || '–'}`;

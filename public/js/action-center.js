@@ -27,6 +27,12 @@ const AC = {
 
 function acNum(v) { return Number(v) || 0; }
 
+// (Re)build the shared inventory + restock lookups from S (spec §1 / §3.2).
+function acBuildInvIndexes() {
+  if (typeof buildInventoryIndex === 'function' && Array.isArray(S.inventoryPool))     buildInventoryIndex();
+  if (typeof buildRestockIndex   === 'function' && Array.isArray(S.inventoryForecast)) buildRestockIndex();
+}
+
 // Platform pill colours, matching the rest of the dashboard.
 function acPlatPill(platform) {
   const p = String(platform || '').trim();
@@ -58,8 +64,9 @@ async function acFetchJSON(url) {
 
 async function loadActionCenterData() {
   const ready = Array.isArray(S.orderDetail) && Array.isArray(S.couponOrder) &&
-                Array.isArray(S.couponSku)   && Array.isArray(S.sku);
-  if (ready) { renderActionCenterPage(); return; }
+                Array.isArray(S.couponSku)   && Array.isArray(S.sku) &&
+                Array.isArray(S.inventoryForecast);
+  if (ready) { acBuildInvIndexes(); renderActionCenterPage(); return; }
 
   acRenderLoading();
   try {
@@ -68,7 +75,11 @@ async function loadActionCenterData() {
     if (!Array.isArray(S.couponOrder)) jobs.push(acFetchJSON('/api/coupon-order').then(d => { S.couponOrder = d; }));
     if (!Array.isArray(S.couponSku))   jobs.push(acFetchJSON('/api/coupon-sku').then(d => { S.couponSku = d; }));
     if (!Array.isArray(S.sku))         jobs.push(acFetchJSON('/api/sku').then(d => { S.sku = d; }));
+    // Inventory pool (current stock) + forecast (restock signal) — supplementary.
+    if (!Array.isArray(S.inventoryPool))     jobs.push(acFetchJSON('/api/inventory-pool').then(d => { S.inventoryPool = d; }).catch(() => { S.inventoryPool = []; }));
+    if (!Array.isArray(S.inventoryForecast)) jobs.push(acFetchJSON('/api/inventory-forecast').then(d => { S.inventoryForecast = d; }).catch(() => { S.inventoryForecast = []; }));
     await Promise.all(jobs);
+    acBuildInvIndexes();
     renderActionCenterPage();
   } catch (err) {
     if (err.message === 'unauthorized') return;
@@ -376,6 +387,28 @@ function acOrderRow(i) {
     </div>`;
 }
 
+// Inventory stat value: total + optional FBA/warehouse split (spec §3.1).
+function acInventoryStat(platform, sku) {
+  const inv = (typeof inventoryForView === 'function')
+    ? inventoryForView(sku, platform) : { found: false };
+  if (!inv.found) return acStat('Inventory', '<span style="color:var(--text3);">—</span>');
+  const split = inv.split
+    ? ` <span style="font-size:10px;color:var(--text3);">FBA ${Math.round(inv.fba).toLocaleString()} · Whse ${Math.round(inv.hnp).toLocaleString()}</span>`
+    : '';
+  return acStat('Inventory', `${Math.round(inv.total).toLocaleString()}${split}`);
+}
+
+// Restock warning tag — only when the system still suggests restocking (spec §3.2).
+function acRestockTag(platform, sku) {
+  const rs = (typeof lookupRestock === 'function') ? lookupRestock(platform, sku) : null;
+  if (!rs) return '';
+  const units = Math.round(rs.units);
+  const text = rs.profit < 0
+    ? `⚠ System still suggests restocking ${units} units · est. loss ${fmt(Math.abs(rs.profit))}`
+    : `⚠ System still suggests restocking ${units} units`;
+  return `<div style="margin-top:6px;"><span style="font-size:11px;font-weight:600;color:#f59e0b;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.3);padding:2px 9px;border-radius:6px;">${text}</span></div>`;
+}
+
 // ── SKU level (PRICING / RETURN): order + net everywhere, dual profit ─────────
 function acSkuPRRow(i) {
   const metrics = [
@@ -385,6 +418,7 @@ function acSkuPRRow(i) {
     acStatDual('Qty', Math.round(i.orderQty || 0).toLocaleString(), Math.round(i.netQty || 0).toLocaleString()),
     acStat('Return Rate', i.returnRate != null
       ? `<span style="color:${i.returnRate > 0.10 ? '#f59e0b' : 'var(--text)'};">${fmt(i.returnRate, 'pct')}</span>` : '—'),
+    acInventoryStat(i.platform, i.sku),
   ].join('');
 
   return `
@@ -394,6 +428,7 @@ function acSkuPRRow(i) {
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span class="ac-skubig">${i.sku || '—'}</span>${acPlatPill(i.platform)}
         </div>
+        ${acRestockTag(i.platform, i.sku)}
       </div>
       <div class="ac-s-metrics ac-metrics">${metrics}</div>
       <div class="ac-s-profit">
