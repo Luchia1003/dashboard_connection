@@ -2,6 +2,7 @@
 
 function renderProductsPage() {
   renderSKUTable(getSku(), getSkuFull());
+  if (typeof updateDownloadHints === 'function') updateDownloadHints();
 }
 window.renderProductsPage = renderProductsPage;
 
@@ -141,28 +142,29 @@ window.clearSkuSearch = clearSkuSearch;
 
 // ── Render Table ──────────────────────────────────────────────────────────────
 
-function renderSKUTable(filteredData, fullData) {
+// Resolve the "Show" control to a row limit (Infinity for All / blank custom).
+function getTopN() {
+  const topRaw = (document.getElementById('topSel') || {}).value || '100';
+  if (topRaw === 'all') return Infinity;
+  if (topRaw === 'custom') {
+    const c = parseInt((document.getElementById('topCustom') || {}).value, 10);
+    return (c && c > 0) ? c : Infinity;
+  }
+  return parseInt(topRaw, 10) || 100;
+}
+window.getTopN = getTopN;
+
+// Group → compute → search-filter → sort → limit. Shared by the table render
+// and the CSV export so both show exactly the same SKUs.
+function selectSkus(filteredData, fullData) {
   const f      = fields(S.mode);
   const metric = (document.getElementById('sortMetric') || {}).value || 'revenue';
   const period = (document.getElementById('sortPeriod') || {}).value || 'total';
   const dir    = (document.getElementById('sortDir')    || {}).value || 'desc';
-
-  // "Show" supports fixed counts, All, and a free-form custom N.
-  const topRaw = (document.getElementById('topSel') || {}).value || '100';
-  let topN;
-  if (topRaw === 'all') {
-    topN = Infinity;
-  } else if (topRaw === 'custom') {
-    const c = parseInt((document.getElementById('topCustom') || {}).value, 10);
-    topN = (c && c > 0) ? c : Infinity;
-  } else {
-    topN = parseInt(topRaw, 10) || 100;
-  }
+  const topN   = getTopN();
 
   const searchRaw = (document.getElementById('skuSearch') || {}).value || '';
   const query = searchRaw.trim().toLowerCase();
-  const clearBtn = document.getElementById('skuSearchClear');
-  if (clearBtn) clearBtn.style.display = query ? '' : 'none';
 
   // Group filtered rows by SKU
   const fMap = {};
@@ -210,7 +212,17 @@ function renderSKUTable(filteredData, fullData) {
     return dir === 'asc' ? -diff : diff;
   });
 
+  // Search shows every match; otherwise cap at the Show limit.
   const visible = query ? skus : skus.slice(0, topN);
+  return { f, query, searchRaw, visible };
+}
+window.selectSkus = selectSkus;
+
+function renderSKUTable(filteredData, fullData) {
+  const { f, query, searchRaw, visible } = selectSkus(filteredData, fullData);
+
+  const clearBtn = document.getElementById('skuSearchClear');
+  if (clearBtn) clearBtn.style.display = query ? '' : 'none';
 
   document.getElementById('returnHeader').style.display = f.showRet ? '' : 'none';
 

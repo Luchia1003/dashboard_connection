@@ -133,9 +133,19 @@ window.trLabel      = trLabel;
 // Product Detail → matches the global Time Range, Platform, and Net/Order/Refund mode.
 function downloadSkuCSV() {
   if (!S.sku) { alert('Data not loaded yet.'); return; }
-  const rows = getSku(); // already platform + time-range filtered
   const mode = S.mode || 'net';
   const platform = (S.platform || 'all').toLowerCase();
+
+  // Match the table: only the SKUs currently shown (current sort + Show limit,
+  // or all search matches). Keep the raw daily rows, ordered by that ranking.
+  const { visible } = selectSkus(getSku(), getSkuFull());
+  const rank = new Map(visible.map((s, idx) => [s.sku, idx]));
+  let rows = getSku().filter(r => rank.has(r.SALES_SKU || 'UNKNOWN'));
+  rows.sort((a, b) => {
+    const ra = rank.get(a.SALES_SKU || 'UNKNOWN'), rb = rank.get(b.SALES_SKU || 'UNKNOWN');
+    if (ra !== rb) return ra - rb;
+    return String(a.DATE || '').localeCompare(String(b.DATE || ''));
+  });
 
   const base = ['DATE', 'PLATFORM', 'SALES_SKU', 'DESCRIPTION', 'UNIT_COST'];
   const modeCols = {
@@ -144,7 +154,8 @@ function downloadSkuCSV() {
     refund: base.concat(['REFUND_COUNT','REFUND_QUANTITY','REFUND_PRODUCT_SALES','REFUND_GROSS_SALES','REFUND_MARGIN','REFUND_COGS','REFUND_PROFIT']),
   };
   const cols = modeCols[mode] || modeCols.net;
-  downloadCSV(rows, `product_detail_${platform}_${mode}_${trLabel()}.csv`, cols);
+  const topSlug = topDisplay().toLowerCase().replace(/\s+/g, '');
+  downloadCSV(rows, `product_detail_${platform}_${mode}_${trLabel()}_${topSlug}.csv`, cols);
 }
 
 // Order Detail → matches the platform toggle and the Date dropdown.
@@ -264,6 +275,21 @@ function trDisplay() {
 
 function platformDisplay() { return PLATFORM_LABEL[(S.platform || 'all').toLowerCase()] || 'All Platforms'; }
 
+// Human label for the Product Detail "Show" limit. While a search is active the
+// table ignores the limit and shows every match, so reflect that.
+function topDisplay() {
+  const q = ((document.getElementById('skuSearch') || {}).value || '').trim();
+  if (q) return 'Search matches';
+  const v = (document.getElementById('topSel') || {}).value || '100';
+  if (v === 'all') return 'All';
+  if (v === 'custom') {
+    const c = parseInt((document.getElementById('topCustom') || {}).value, 10);
+    return (c && c > 0) ? `Top ${c}` : 'All';
+  }
+  return `Top ${v}`;
+}
+window.topDisplay = topDisplay;
+
 function hintParts(parts) {
   return parts.map(p => `<b>${p}</b>`).join('<span class="sep">·</span>');
 }
@@ -275,7 +301,7 @@ function updateDownloadHints() {
   const skuH = document.getElementById('skuDlHint');
   if (skuH) {
     const mode = MODE_LABEL[S.mode || 'net'];
-    skuH.innerHTML = HINT_PREFIX + hintParts([mode, platformDisplay(), trDisplay()]);
+    skuH.innerHTML = HINT_PREFIX + hintParts([mode, platformDisplay(), trDisplay(), topDisplay()]);
   }
 
   // Order Detail → platform · date · drop-ship filter
