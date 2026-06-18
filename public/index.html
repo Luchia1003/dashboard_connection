@@ -29,7 +29,12 @@
     html, body { height: 100%; }
     body { overflow: hidden; }
     #main { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
-    #topbar { flex: none; }
+    /* Fixed topbar height so every page's header lines up, regardless of which
+       toggle it shows. */
+    #topbar { flex: none; min-height: 64px; align-items: center; }
+    /* Page-level toggles in the topbar all share the platform-toggle size. */
+    #topToggle .toggle-group { padding: 4px; border-radius: 10px; border: 1px solid var(--border); }
+    #topToggle .toggle-btn { padding: 8px 20px; font-size: 13px; border-radius: 7px; font-weight: 600; }
     #content { flex: 1; min-height: 0; overflow-y: auto; padding: 24px; }
 
     /* Table pages: content itself doesn't scroll — the table body does.
@@ -843,8 +848,7 @@
           </div>
         </div>
 
-        <!-- Meta info + CSV download share the same row -->
-        <div id="inventoryMeta" style="font-size:11px;color:var(--text3);"></div>
+        <!-- CSV download (right side, same row as the filters) -->
         <div class="dl-wrap" style="margin-left:auto;">
           <button id="inventoryDlBtn" class="dl-btn" onclick="downloadInventoryCSV()" title="Download the currently selected inventory view (matches Channel/Status or Warehouse/Priority filters)">
             <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>

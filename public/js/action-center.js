@@ -109,6 +109,7 @@ function acOrderPricingDropship() {
       key: `order:${r.ORDER_ID}:${r.SKU}`,
       level: 'order', cause,
       orderId: r.ORDER_ID, sku: r.SKU, platform: r.PLATFORM || '',
+      orderDate: String(r.ORDER_DATE || '').slice(0, 10),
       profit, preFreeProfit: preFee,
       productSales: acNum(r.PRODUCT_SALES),
       salesMargin, unitCost, qty, dropshipFee,
@@ -135,6 +136,7 @@ function acOrderCoupon() {
       key: `order:${r.ORDER_ID}:${r.SKU}`,
       level: 'order', cause: 'COUPON',
       orderId: r.ORDER_ID, sku: r.SKU, platform: r.PLATFORM || '',
+      orderDate: String(r.ORDER_DATE || '').slice(0, 10),
       profit, preFreeProfit: preCoupon,
       productSales: acNum(r.PRODUCT_SALES),
       salesMargin, unitCost, qty,
@@ -260,6 +262,65 @@ function acBuildInsights() {
   ];
   return acDedup(candidates);
 }
+
+// ── CSV download (all order-level / all SKU-level insights) ───────────────────
+
+const AC_ORDER_COLS = ['CAUSE', 'ORDER_ID', 'SKU', 'PLATFORM', 'ORDER_DATE', 'QTY',
+  'PRODUCT_SALES', 'SALES_MARGIN', 'UNIT_COST', 'DROPSHIP_FEE', 'COUPON_FEE',
+  'PRE_FEE_PROFIT', 'PROFIT'];
+const AC_SKU_COLS = ['CAUSE', 'SKU', 'PLATFORM', 'ORDER_PROFIT', 'NET_PROFIT',
+  'ORDER_PRODUCT_SALES', 'NET_PRODUCT_SALES', 'ORDER_MARGIN', 'NET_MARGIN',
+  'ORDER_QTY', 'NET_QTY', 'UNIT_COST', 'RETURN_RATE', 'COUPON_FEE',
+  'PRE_COUPON_PROFIT', 'PROFIT'];
+
+const acRound = v => (v == null ? '' : Math.round(Number(v) * 100) / 100);
+
+function acOrderCsvRow(i) {
+  return {
+    CAUSE: i.cause, ORDER_ID: i.orderId, SKU: i.sku, PLATFORM: i.platform,
+    ORDER_DATE: i.orderDate || '', QTY: i.qty,
+    PRODUCT_SALES: acRound(i.productSales), SALES_MARGIN: acRound(i.salesMargin),
+    UNIT_COST: acRound(i.unitCost), DROPSHIP_FEE: i.dropshipFee ? acRound(i.dropshipFee) : '',
+    COUPON_FEE: i.couponFee ? acRound(i.couponFee) : '',
+    PRE_FEE_PROFIT: acRound(i.preFreeProfit), PROFIT: acRound(i.profit),
+  };
+}
+
+function acSkuCsvRow(i) {
+  if (i.skuKind === 'coupon') {
+    return {
+      CAUSE: i.cause, SKU: i.sku, PLATFORM: i.platform,
+      ORDER_PROFIT: '', NET_PROFIT: acRound(i.profit),
+      ORDER_PRODUCT_SALES: '', NET_PRODUCT_SALES: acRound(i.productSales),
+      ORDER_MARGIN: '', NET_MARGIN: acRound(i.salesMargin),
+      ORDER_QTY: '', NET_QTY: i.qty, UNIT_COST: acRound(i.unitCost),
+      RETURN_RATE: '', COUPON_FEE: acRound(i.couponFee),
+      PRE_COUPON_PROFIT: acRound(i.preFreeProfit), PROFIT: acRound(i.profit),
+    };
+  }
+  return {
+    CAUSE: i.cause, SKU: i.sku, PLATFORM: i.platform,
+    ORDER_PROFIT: acRound(i.orderProfit), NET_PROFIT: acRound(i.netProfit),
+    ORDER_PRODUCT_SALES: acRound(i.orderSales), NET_PRODUCT_SALES: acRound(i.netSales),
+    ORDER_MARGIN: acRound(i.orderMargin), NET_MARGIN: acRound(i.netMargin),
+    ORDER_QTY: i.orderQty, NET_QTY: i.netQty, UNIT_COST: acRound(i.unitCost),
+    RETURN_RATE: i.returnRate != null ? acRound(i.returnRate * 100) + '%' : '',
+    COUPON_FEE: '', PRE_COUPON_PROFIT: '', PROFIT: acRound(i.profit),
+  };
+}
+
+// Download every insight of one level (ignores the active cause filter).
+function acDownload(level) {
+  const list = acBuildInsights().filter(i => i.level === level);
+  if (!list.length) { alert(`No ${level}-level insights to download.`); return; }
+  const stamp = typeof todayStamp === 'function' ? todayStamp() : '';
+  if (level === 'order') {
+    downloadCSV(list.map(acOrderCsvRow), `action_center_order_level_${stamp}.csv`, AC_ORDER_COLS);
+  } else {
+    downloadCSV(list.map(acSkuCsvRow), `action_center_sku_level_${stamp}.csv`, AC_SKU_COLS);
+  }
+}
+window.acDownload = acDownload;
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -448,6 +509,16 @@ function renderActionCenterPage() {
           </button>
           <button class="ac-level-btn ${level === 'sku' ? 'active' : ''}" onclick="acSetLevel('sku')">
             SKU Level <span class="ac-lvl-count">${skuInsights.length}</span>
+          </button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button class="dl-btn" onclick="acDownload('order')" title="Download all order-level insights (ignores the cause filter)">
+            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            Order CSV
+          </button>
+          <button class="dl-btn" onclick="acDownload('sku')" title="Download all SKU-level insights (ignores the cause filter)">
+            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            SKU CSV
           </button>
         </div>
       </div>
