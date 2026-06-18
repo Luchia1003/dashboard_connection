@@ -356,6 +356,25 @@
     </button>
     <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
     <h1 id="pageTitle" style="font-size:18px;font-weight:700;color:var(--text);">Sales Dashboard</h1>
+
+    <!-- Page-level toggle, hoisted into the topbar to save a row.
+         switchPage() shows the one relevant to the current page. -->
+    <div id="topToggle" style="display:flex;align-items:center;gap:10px;">
+      <div class="platform-group" id="topbarPlatform" style="display:none;">
+        <button class="platform-btn active" data-platform="all"     onclick="setPlatform('all',this)">All</button>
+        <button class="platform-btn"        data-platform="amazon"  onclick="setPlatform('amazon',this)">Amazon</button>
+        <button class="platform-btn"        data-platform="shopify" onclick="setPlatform('shopify',this)">Shopify</button>
+      </div>
+      <div class="toggle-group" id="couponToggle" style="display:none;">
+        <button class="toggle-btn active" onclick="setCouponView('sku',this)">SKU Level</button>
+        <button class="toggle-btn"        onclick="setCouponView('order',this)">Order Level</button>
+      </div>
+      <div class="toggle-group" id="inventoryToggle" style="display:none;">
+        <button class="toggle-btn active" onclick="setInventoryView('forecast',this)">Forecast</button>
+        <button class="toggle-btn"        onclick="setInventoryView('aging',this)">Slow Traffic</button>
+      </div>
+    </div>
+
     <div style="flex:1;"></div>
 
     <!-- 3-box Time Range -->
@@ -494,14 +513,6 @@
     <!-- Products Section -->
     <section id="productsSection" style="display:none;">
       <!-- Platform toggle -->
-      <div class="platform-row">
-        <div class="platform-group" id="productsPlatformToggle">
-          <button class="platform-btn active" data-platform="all"     onclick="setPlatform('all',this)">All</button>
-          <button class="platform-btn"        data-platform="amazon"  onclick="setPlatform('amazon',this)">Amazon</button>
-          <button class="platform-btn"        data-platform="shopify" onclick="setPlatform('shopify',this)">Shopify</button>
-        </div>
-        <span style="font-size:12px;color:var(--text3);">Platform · filters SKU rows &amp; return rate</span>
-      </div>
       <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;z-index:25;">
         <div class="toggle-group">
           <button class="toggle-btn active" onclick="setMode('net',this)">Net</button>
@@ -587,14 +598,6 @@
     <!-- Order Detail Section -->
     <section id="orderDetailSection" style="display:none;">
       <!-- Platform toggle -->
-      <div class="platform-row">
-        <div class="platform-group" id="orderDetailPlatformToggle">
-          <button class="platform-btn active" data-platform="all"     onclick="setPlatform('all',this)">All</button>
-          <button class="platform-btn"        data-platform="amazon"  onclick="setPlatform('amazon',this)">Amazon</button>
-          <button class="platform-btn"        data-platform="shopify" onclick="setPlatform('shopify',this)">Shopify</button>
-        </div>
-        <span style="font-size:12px;color:var(--text3);">Platform · filters order-level rows</span>
-      </div>
       <!-- Sticky controls -->
       <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;z-index:25;">
         <!-- Independent date filter (last 5 days) -->
@@ -679,11 +682,6 @@
     <section id="couponSection" style="display:none;">
       <!-- Sticky controls -->
       <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;z-index:25;">
-        <!-- View toggle -->
-        <div class="toggle-group" id="couponToggle">
-          <button class="toggle-btn active" onclick="setCouponView('sku',this)">SKU Level</button>
-          <button class="toggle-btn" onclick="setCouponView('order',this)">Order Level</button>
-        </div>
         <!-- Coupon-specific date filter (independent from topbar) -->
         <div style="display:flex;align-items:center;gap:6px;">
           <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -766,13 +764,7 @@
     <section id="inventorySection" style="display:none;">
       <!-- Sticky controls -->
       <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;z-index:25;">
-        <!-- ── Row 1: View toggle + filters + sort + search (everything in one line) ── -->
-        <div class="toggle-group" id="inventoryToggle">
-          <button class="toggle-btn active" onclick="setInventoryView('forecast',this)">Forecast</button>
-          <button class="toggle-btn" onclick="setInventoryView('aging',this)">Slow Traffic</button>
-        </div>
-        <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
-
+        <!-- Filters + sort + search + CSV, all on one row (view toggle is in the topbar) -->
         <!-- Forecast: Channel + Status + Sort + Direction + Search -->
         <div class="forecast-only" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="font-size:12px;color:var(--text3);">Channel</span>
@@ -851,10 +843,7 @@
           </div>
         </div>
 
-        <!-- Force line break before the bottom row -->
-        <div style="flex-basis:100%;height:0;"></div>
-
-        <!-- ── Row 2: Meta info (left) + CSV download (right) ── -->
+        <!-- Meta info + CSV download share the same row -->
         <div id="inventoryMeta" style="font-size:11px;color:var(--text3);"></div>
         <div class="dl-wrap" style="margin-left:auto;">
           <button id="inventoryDlBtn" class="dl-btn" onclick="downloadInventoryCSV()" title="Download the currently selected inventory view (matches Channel/Status or Warehouse/Priority filters)">

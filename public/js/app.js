@@ -506,6 +506,12 @@ function switchPage(page) {
   // Action Center keeps the topbar Time Range because its SKU-level insights follow it.
   const hideTopbar = page === 'coupon' || page === 'orderDetail' || page === 'inventory';
   document.getElementById('trControls').style.display = hideTopbar ? 'none' : 'flex';
+
+  // Page-level toggles live in the topbar (next to the title) to save a row.
+  document.getElementById('topbarPlatform').style.display  = (page === 'products' || page === 'orderDetail') ? 'inline-flex' : 'none';
+  document.getElementById('couponToggle').style.display    = page === 'coupon'    ? 'flex' : 'none';
+  document.getElementById('inventoryToggle').style.display = page === 'inventory' ? 'flex' : 'none';
+  syncPlatformButtons(); // keep the topbar platform group's active state in sync
   closeNavMenu();
   if (page === 'coupon') {
     loadCouponData();
