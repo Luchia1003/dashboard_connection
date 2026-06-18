@@ -269,15 +269,17 @@
     .ac-s-metrics{ grid-area: metrics; }
     .ac-s-profit { grid-area: profit; text-align:right; white-space:nowrap; }
 
-    /* Cleaner SKU metric strip: a prominent "signals" line (return rate +
-       inventory) over a quieter "numbers" line with order→net arrows. */
-    .ac-mline { display:flex; flex-wrap:wrap; gap:3px 16px; }
-    .ac-mline.signals { font-size:13px; }
-    .ac-mline.numbers { font-size:12px; color:var(--text2); margin-top:6px; }
-    .ac-mi   { white-space:nowrap; }
-    .ac-mi-l { color:var(--text3); font-size:10px; text-transform:uppercase; letter-spacing:.03em; margin-right:3px; }
-    .ac-arrow{ color:var(--text3); margin:0 5px; }
-    .ac-sub2 { font-size:12px; color:var(--text3); margin-top:3px; }
+    /* SKU metric columns: label on top, value(s) below — compact table feel.
+       Dual metrics stack order/net; inventory stacks FBA/Whse. */
+    .ac-metrics-row { display:flex; flex-wrap:wrap; gap:8px 20px; align-items:flex-start; }
+    .ac-st   { display:flex; flex-direction:column; gap:3px; min-width:0; }
+    .ac-st-l { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+    .ac-st-v { font-size:12.5px; color:var(--text); line-height:1.5; }
+    .ac-st-v .ln { white-space:nowrap; }
+    .ac-st-v .k  { color:var(--text3); font-size:10px; margin-right:3px; }
+    .ac-st-right { align-items:flex-end; text-align:right; }
+    /* Restock column — indigo, deliberately not the amber Amazon pill colour. */
+    .ac-restock .ac-st-l, .ac-restock .ac-st-v b, .ac-restock .ac-st-v .k { color:#6366f1; }
 
     .ac-orderid { font-weight:700; font-size:14px; color:var(--text); font-family:monospace; word-break:break-all; }
     .ac-skubig  { font-weight:700; font-size:15px; color:var(--text); }
