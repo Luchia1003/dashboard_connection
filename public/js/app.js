@@ -470,13 +470,22 @@ function rerender() {
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 
+// Pages whose body is a single full-height table (content doesn't scroll; the
+// table body does). Everything else is a normal vertical-scroll page.
+const TABLE_PAGES = ['products', 'orderDetail', 'coupon', 'inventory'];
+
 function switchPage(page) {
   S.page = page;
+  // Table pages use display:flex so the section can be a flex column; scroll
+  // pages use block.
+  const isTable = TABLE_PAGES.includes(page);
+  document.body.classList.toggle('tableview', isTable);
+  const shown = isTable ? 'flex' : 'block';
   document.getElementById('salesSection').style.display       = page === 'sales'       ? 'block' : 'none';
-  document.getElementById('productsSection').style.display    = page === 'products'    ? 'block' : 'none';
-  document.getElementById('orderDetailSection').style.display = page === 'orderDetail' ? 'block' : 'none';
-  document.getElementById('couponSection').style.display      = page === 'coupon'      ? 'block' : 'none';
-  document.getElementById('inventorySection').style.display   = page === 'inventory'   ? 'block' : 'none';
+  document.getElementById('productsSection').style.display    = page === 'products'    ? shown  : 'none';
+  document.getElementById('orderDetailSection').style.display = page === 'orderDetail' ? shown  : 'none';
+  document.getElementById('couponSection').style.display      = page === 'coupon'      ? shown  : 'none';
+  document.getElementById('inventorySection').style.display   = page === 'inventory'   ? shown  : 'none';
   document.getElementById('actionSection').style.display      = page === 'action'      ? 'block' : 'none';
   document.getElementById('navSales').classList.toggle('active',       page === 'sales');
   document.getElementById('navProducts').classList.toggle('active',    page === 'products');

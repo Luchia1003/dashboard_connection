@@ -22,7 +22,28 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
 
-    #main { min-height: 100vh; }
+    /* ── App shell: one viewport-height column, single scroll context ──
+       The topbar is fixed in flow; #content is the ONLY scroll area. This kills
+       the old dual-scroll bug where wheeling over a sticky toolbar slid the
+       table header up behind it. No magic-number heights needed. */
+    html, body { height: 100%; }
+    body { overflow: hidden; }
+    #main { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
+    #topbar { flex: none; }
+    #content { flex: 1; min-height: 0; overflow-y: auto; padding: 24px; }
+
+    /* Table pages: content itself doesn't scroll — the table body does.
+       switchPage() adds .tableview to <body> and sets the active section to
+       display:flex. */
+    body.tableview #content { overflow: hidden; }
+    body.tableview #content > section { flex: 1; min-height: 0; flex-direction: column; }
+    /* The table card (always the last child) grows; its inner div scrolls. */
+    body.tableview #content > section > .card:last-child {
+      flex: 1; min-height: 0; display: flex; flex-direction: column;
+    }
+    body.tableview #content > section > .card:last-child > div {
+      flex: 1; min-height: 0; height: auto !important; overflow: auto;
+    }
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
     .kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 
@@ -157,6 +178,18 @@
       .comp-grid { grid-template-columns: 1fr !important; }
       .charts-grid { grid-template-columns: 1fr !important; }
       .ctrl-row { flex-wrap: wrap; }
+
+      /* Tighter shell on phones */
+      #content { padding: 12px; }
+      #topbar { padding: 10px 12px; gap: 8px; row-gap: 8px; }
+      #pageTitle { font-size: 16px; }
+      /* The 3-box Time Range wraps onto its own full-width row and the date
+         inputs share it evenly instead of overflowing. */
+      #trControls { width: 100%; order: 3; }
+      #trControls #trFrom, #trControls #trTo { flex: 1; min-width: 0; width: auto; }
+      #trQuick, #trMonth { flex: 1; min-width: 0; }
+      /* CSV "Will download" hint wrappers shouldn't force a wide row */
+      .dl-wrap { margin-left: 0 !important; width: 100%; }
     }
     @media (min-width: 768px) and (max-width: 1023px) {
       .kpi-grid { grid-template-columns: repeat(2,1fr) !important; }
@@ -313,7 +346,7 @@
 <main id="main">
 
   <!-- Topbar -->
-  <header style="display:flex;align-items:center;gap:12px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--card);position:sticky;top:0;z-index:30;">
+  <header id="topbar" style="display:flex;align-items:center;gap:12px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--card);z-index:30;flex-wrap:wrap;">
     <button class="brand-btn" id="brandBtn" onclick="toggleNavMenu()" aria-label="Open navigation menu">
       <div class="brand-logo">
         <svg width="16" height="16" fill="none" stroke="white" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
@@ -359,7 +392,7 @@
     </div>
   </header>
 
-  <div style="padding:24px;">
+  <div id="content">
 
     <!-- Sales Section -->
     <section id="salesSection">
