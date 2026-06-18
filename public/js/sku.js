@@ -195,6 +195,12 @@ function selectSkus(filteredData, fullData) {
 
   // Sort: use PERIOD TOTALS for rolling (absolute value), not daily avg
   function getSortVal(s) {
+    // Inventory is a current snapshot — no rolling concept, sort by total stock
+    // under the active platform view regardless of the period selector.
+    if (metric === 'inventory') {
+      const inv = (typeof inventoryForView === 'function') ? inventoryForView(s.sku, S.platform) : { found: false };
+      return inv.found ? inv.total : Number.NEGATIVE_INFINITY;
+    }
     if (period === 'total') {
       return { revenue: s.rev, profit: s.profit, orders: s.orders, margin: s.marginAmt, returnRate: s.rr30 || 0 }[metric] ?? 0;
     }

@@ -345,12 +345,6 @@ function acCauseCounts(list) {
 function acStat(label, valHtml) {
   return `<div class="ac-m"><div class="ac-m-l">${label}</div><div class="ac-m-v">${valHtml}</div></div>`;
 }
-// Dual order/net value block, with the net figure coloured if negative.
-function acStatDual(label, orderVal, netVal) {
-  const netColor = netVal < 0 ? '#ef4444' : 'var(--text)';
-  const val = `<span class="ac-dual"><span class="ac-d-tag">order</span> ${fmt(orderVal)} &nbsp;<span class="ac-d-tag">net</span> <span style="color:${netColor};">${fmt(netVal)}</span></span>`;
-  return acStat(label, val);
-}
 function acColor(v) { return v < 0 ? '#ef4444' : 'var(--text)'; }
 
 // ── Order level row: data on top, insight below ───────────────────────────────
@@ -387,17 +381,6 @@ function acOrderRow(i) {
     </div>`;
 }
 
-// Inventory stat value: total + optional FBA/warehouse split (spec §3.1).
-function acInventoryStat(platform, sku) {
-  const inv = (typeof inventoryForView === 'function')
-    ? inventoryForView(sku, platform) : { found: false };
-  if (!inv.found) return acStat('Inventory', '<span style="color:var(--text3);">—</span>');
-  const split = inv.split
-    ? ` <span style="font-size:10px;color:var(--text3);">FBA ${Math.round(inv.fba).toLocaleString()} · Whse ${Math.round(inv.hnp).toLocaleString()}</span>`
-    : '';
-  return acStat('Inventory', `${Math.round(inv.total).toLocaleString()}${split}`);
-}
-
 // Restock warning tag — only when the system still suggests restocking (spec §3.2).
 function acRestockTag(platform, sku) {
   const rs = (typeof lookupRestock === 'function') ? lookupRestock(platform, sku) : null;
@@ -409,17 +392,45 @@ function acRestockTag(platform, sku) {
   return `<div style="margin-top:6px;"><span style="font-size:11px;font-weight:600;color:#f59e0b;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.3);padding:2px 9px;border-radius:6px;">${text}</span></div>`;
 }
 
-// ── SKU level (PRICING / RETURN): order + net everywhere, dual profit ─────────
+// order → net inline, collapsing to a single value when unchanged. Net side is
+// emphasised (and reddened when negative) since that's the realised figure.
+function acArrow(o, n, money) {
+  const f = v => money ? fmt(v) : Math.round(v || 0).toLocaleString();
+  if (Number(o) === Number(n)) return `<span style="color:var(--text);">${f(n)}</span>`;
+  return `<span style="color:var(--text3);">${f(o)}</span><span class="ac-arrow">→</span>` +
+         `<span style="color:${Number(n) < 0 ? '#ef4444' : 'var(--text)'};font-weight:700;">${f(n)}</span>`;
+}
+
+function acMi(label, valHtml) {
+  return `<span class="ac-mi"><span class="ac-mi-l">${label}</span>${valHtml}</span>`;
+}
+
+// ── SKU level (PRICING / RETURN) — cleaner layout ─────────────────────────────
+// Hierarchy: cause + SKU + restock on the left, the realised loss big on the
+// right, and two calm metric lines in the middle — "signals" (return rate +
+// inventory: what to act on) over "numbers" (order→net sales/margin/qty).
 function acSkuPRRow(i) {
-  const metrics = [
-    acStatDual('Product Sales', i.orderSales, i.netSales),
-    acStatDual('Sales Margin', i.orderMargin, i.netMargin),
-    acStat('Unit Cost', fmt(i.unitCost)),
-    acStatDual('Qty', Math.round(i.orderQty || 0).toLocaleString(), Math.round(i.netQty || 0).toLocaleString()),
-    acStat('Return Rate', i.returnRate != null
-      ? `<span style="color:${i.returnRate > 0.10 ? '#f59e0b' : 'var(--text)'};">${fmt(i.returnRate, 'pct')}</span>` : '—'),
-    acInventoryStat(i.platform, i.sku),
-  ].join('');
+  const inv = (typeof inventoryForView === 'function')
+    ? inventoryForView(i.sku, i.platform) : { found: false };
+  const invHtml = inv.found
+    ? `<b>${Math.round(inv.total).toLocaleString()}</b>${inv.split
+        ? ` <span style="color:var(--text3);font-size:11px;">FBA ${Math.round(inv.fba).toLocaleString()} · Whse ${Math.round(inv.hnp).toLocaleString()}</span>` : ''}`
+    : '<b style="color:var(--text3);">—</b>';
+  const rrHigh = i.returnRate != null && i.returnRate > 0.10;
+  const rrHtml = i.returnRate != null
+    ? `<b style="color:${rrHigh ? '#f59e0b' : 'var(--text)'};">${fmt(i.returnRate, 'pct')}</b>`
+    : '<b style="color:var(--text3);">—</b>';
+
+  const signals = `<div class="ac-mline signals">
+      ${acMi('Return rate', rrHtml)}
+      ${acMi('Inventory', invHtml)}
+    </div>`;
+  const numbers = `<div class="ac-mline numbers">
+      ${acMi('Sales', acArrow(i.orderSales, i.netSales, true))}
+      ${acMi('Margin', acArrow(i.orderMargin, i.netMargin, true))}
+      ${acMi('Qty', acArrow(i.orderQty, i.netQty, false))}
+      ${acMi('Unit cost', `<span style="color:var(--text);">${fmt(i.unitCost)}</span>`)}
+    </div>`;
 
   return `
     <div class="ac-row ac-srow">
@@ -430,10 +441,11 @@ function acSkuPRRow(i) {
         </div>
         ${acRestockTag(i.platform, i.sku)}
       </div>
-      <div class="ac-s-metrics ac-metrics">${metrics}</div>
+      <div class="ac-s-metrics">${signals}${numbers}</div>
       <div class="ac-s-profit">
-        <div class="ac-prow"><span class="ac-plabel">Order Profit · pre-return</span><span class="ac-pval" style="color:${acColor(i.orderProfit)};">${fmt(i.orderProfit)}</span></div>
-        <div class="ac-prow"><span class="ac-plabel">Net Profit · after return</span><span class="ac-pval big" style="color:${acColor(i.netProfit)};">${fmt(i.netProfit)}</span></div>
+        <div class="ac-plabel">Net loss · after returns</div>
+        <div class="ac-loss">${fmt(i.netProfit)}</div>
+        <div class="ac-sub2">pre-return <b style="color:${acColor(i.orderProfit)};">${fmt(i.orderProfit)}</b></div>
       </div>
     </div>`;
 }

@@ -269,6 +269,16 @@
     .ac-s-metrics{ grid-area: metrics; }
     .ac-s-profit { grid-area: profit; text-align:right; white-space:nowrap; }
 
+    /* Cleaner SKU metric strip: a prominent "signals" line (return rate +
+       inventory) over a quieter "numbers" line with order→net arrows. */
+    .ac-mline { display:flex; flex-wrap:wrap; gap:3px 16px; }
+    .ac-mline.signals { font-size:13px; }
+    .ac-mline.numbers { font-size:12px; color:var(--text2); margin-top:6px; }
+    .ac-mi   { white-space:nowrap; }
+    .ac-mi-l { color:var(--text3); font-size:10px; text-transform:uppercase; letter-spacing:.03em; margin-right:3px; }
+    .ac-arrow{ color:var(--text3); margin:0 5px; }
+    .ac-sub2 { font-size:12px; color:var(--text3); margin-top:3px; }
+
     .ac-orderid { font-weight:700; font-size:14px; color:var(--text); font-family:monospace; word-break:break-all; }
     .ac-skubig  { font-weight:700; font-size:15px; color:var(--text); }
     .ac-skusmall{ font-weight:600; font-size:13px; color:var(--text2); }
@@ -420,15 +430,6 @@
 
     <!-- Sales Section -->
     <section id="salesSection">
-      <!-- Platform toggle -->
-      <div class="platform-row">
-        <div class="platform-group" id="salesPlatformToggle">
-          <button class="platform-btn active" data-platform="all"     onclick="setPlatform('all',this)">All</button>
-          <button class="platform-btn"        data-platform="amazon"  onclick="setPlatform('amazon',this)">Amazon</button>
-          <button class="platform-btn"        data-platform="shopify" onclick="setPlatform('shopify',this)">Shopify</button>
-        </div>
-        <span style="font-size:12px;color:var(--text3);">Platform · combines or filters all metrics below</span>
-      </div>
       <!-- Sales mode toggle -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
         <div class="toggle-group" id="salesToggle">
@@ -533,6 +534,7 @@
             <option value="orders">Qty/Orders</option>
             <option value="margin">Margin $</option>
             <option value="returnRate">Return Rate</option>
+            <option value="inventory">Inventory</option>
           </select>
           <select id="sortPeriod" class="ctrl-sel" onchange="renderProductsPage()">
             <option value="total">Value</option>

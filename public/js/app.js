@@ -509,7 +509,7 @@ function switchPage(page) {
   document.getElementById('trControls').style.display = hideTopbar ? 'none' : 'flex';
 
   // Page-level toggles live in the topbar (next to the title) to save a row.
-  document.getElementById('topbarPlatform').style.display  = (page === 'products' || page === 'orderDetail') ? 'inline-flex' : 'none';
+  document.getElementById('topbarPlatform').style.display  = (page === 'sales' || page === 'products' || page === 'orderDetail') ? 'inline-flex' : 'none';
   document.getElementById('couponToggle').style.display    = page === 'coupon'    ? 'flex' : 'none';
   document.getElementById('inventoryToggle').style.display = page === 'inventory' ? 'flex' : 'none';
   syncPlatformButtons(); // keep the topbar platform group's active state in sync
@@ -635,6 +635,7 @@ async function init() {
 
     renderSalesPage();
     renderProductsPage();
+    switchPage('sales'); // syncs topbar toggles (shows the platform group on Sales)
     updateDownloadHints();
 
   } catch (err) {
