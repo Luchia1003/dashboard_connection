@@ -35,7 +35,7 @@
     /* Table pages: content itself doesn't scroll — the table body does.
        switchPage() adds .tableview to <body> and sets the active section to
        display:flex. */
-    body.tableview #content { overflow: hidden; }
+    body.tableview #content { overflow: hidden; display: flex; flex-direction: column; }
     body.tableview #content > section { flex: 1; min-height: 0; flex-direction: column; }
     /* The table card (always the last child) grows; its inner div scrolls. */
     body.tableview #content > section > .card:last-child {
@@ -502,7 +502,7 @@
         </div>
         <span style="font-size:12px;color:var(--text3);">Platform · filters SKU rows &amp; return rate</span>
       </div>
-      <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:57px;z-index:25;">
+      <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;z-index:25;">
         <div class="toggle-group">
           <button class="toggle-btn active" onclick="setMode('net',this)">Net</button>
           <button class="toggle-btn" onclick="setMode('order',this)">Order</button>
@@ -596,7 +596,7 @@
         <span style="font-size:12px;color:var(--text3);">Platform · filters order-level rows</span>
       </div>
       <!-- Sticky controls -->
-      <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:57px;z-index:25;">
+      <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;z-index:25;">
         <!-- Independent date filter (last 5 days) -->
         <div style="display:flex;align-items:center;gap:6px;">
           <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -678,7 +678,7 @@
     <!-- Coupon Order Section -->
     <section id="couponSection" style="display:none;">
       <!-- Sticky controls -->
-      <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:57px;z-index:25;">
+      <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;z-index:25;">
         <!-- View toggle -->
         <div class="toggle-group" id="couponToggle">
           <button class="toggle-btn active" onclick="setCouponView('sku',this)">SKU Level</button>
@@ -765,7 +765,7 @@
     <!-- Inventory Section -->
     <section id="inventorySection" style="display:none;">
       <!-- Sticky controls -->
-      <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:57px;z-index:25;">
+      <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;z-index:25;">
         <!-- ── Row 1: View toggle + filters + sort + search (everything in one line) ── -->
         <div class="toggle-group" id="inventoryToggle">
           <button class="toggle-btn active" onclick="setInventoryView('forecast',this)">Forecast</button>
