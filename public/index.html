@@ -35,6 +35,7 @@
     /* Page-level toggles in the topbar all share the platform-toggle size. */
     #topToggle .toggle-group { padding: 4px; border-radius: 10px; border: 1px solid var(--border); }
     #topToggle .toggle-btn { padding: 8px 20px; font-size: 13px; border-radius: 7px; font-weight: 600; }
+    #acLevelToggle .ac-lvl-count { font-size: 11px; font-weight: 700; margin-left: 5px; padding: 0 6px; border-radius: 9px; background: rgba(127,127,127,.18); }
     #content { flex: 1; min-height: 0; overflow-y: auto; padding: 24px; }
 
     /* Table pages: content itself doesn't scroll — the table body does.
@@ -266,8 +267,21 @@
       column-gap: 22px;
     }
     .ac-s-ident  { grid-area: ident; }
-    .ac-s-metrics{ grid-area: metrics; }
+    /* Metrics sit centred between the SKU/Order-ID and the Profit column. */
+    .ac-s-metrics{ grid-area: metrics; display:flex; justify-content:center; }
     .ac-s-profit { grid-area: profit; text-align:right; white-space:nowrap; }
+    .ac-a-metrics, .ac-a-flags { justify-content:center; }
+
+    /* Compact clickable cause chips (single-row header). */
+    .ac-cchip {
+      display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+      padding:5px 10px; border-radius:8px; border:1px solid var(--border);
+      background:var(--input); transition:all .15s;
+    }
+    .ac-cchip:hover { border-color:#0ea5e9; }
+    .ac-cchip.active { border-color:#0ea5e9; background:rgba(14,165,233,.08); box-shadow:0 0 0 1px #0ea5e9 inset; }
+    .ac-cchip.dim { opacity:.5; }
+    .ac-cchip b { font-size:14px; color:var(--text); }
 
     /* SKU metric columns: label on top, value(s) below — compact table feel.
        Dual metrics stack order/net; inventory stacks FBA/Whse. */
@@ -389,6 +403,10 @@
       <div class="toggle-group" id="inventoryToggle" style="display:none;">
         <button class="toggle-btn active" onclick="setInventoryView('forecast',this)">Forecast</button>
         <button class="toggle-btn"        onclick="setInventoryView('aging',this)">Slow Traffic</button>
+      </div>
+      <div class="toggle-group" id="acLevelToggle" style="display:none;">
+        <button class="toggle-btn active" id="acLevelOrderBtn" onclick="acSetLevel('order')">Order Level <span class="ac-lvl-count" id="acOrderCount">0</span></button>
+        <button class="toggle-btn"        id="acLevelSkuBtn"   onclick="acSetLevel('sku')">SKU Level <span class="ac-lvl-count" id="acSkuCount">0</span></button>
       </div>
     </div>
 

@@ -512,6 +512,7 @@ function switchPage(page) {
   document.getElementById('topbarPlatform').style.display  = (page === 'sales' || page === 'products' || page === 'orderDetail') ? 'inline-flex' : 'none';
   document.getElementById('couponToggle').style.display    = page === 'coupon'    ? 'flex' : 'none';
   document.getElementById('inventoryToggle').style.display = page === 'inventory' ? 'flex' : 'none';
+  document.getElementById('acLevelToggle').style.display   = page === 'action'    ? 'flex' : 'none';
   syncPlatformButtons(); // keep the topbar platform group's active state in sync
   closeNavMenu();
   if (page === 'coupon') {

@@ -437,7 +437,7 @@ function acSkuPRRow(i) {
   const profitCol = `<div class="ac-st ac-st-right">
       <div class="ac-st-l">Profit</div>
       <div class="ac-st-v">
-        ${acKV('net', `<b style="color:${acColor(i.netProfit)};font-size:15px;">${fmt(i.netProfit)}</b>`)}
+        ${acKV('net', `<b style="color:${acColor(i.netProfit)};font-size:19px;">${fmt(i.netProfit)}</b>`)}
         ${acKV('order', `<b style="color:${acColor(i.orderProfit)};">${fmt(i.orderProfit)}</b>`)}
       </div>
     </div>`;
@@ -488,21 +488,23 @@ function acRow(i) {
   return acSkuPRRow(i);
 }
 
-// Clickable legend = filter chips + explanation of what each cause means.
-function acLegend(counts, causeOrder, active) {
-  return `<div class="ac-legend">` + causeOrder
-    .filter(c => counts[c])
-    .map(c => {
-      const cls = active && active !== c ? 'ac-filter-chip dim' : (active === c ? 'ac-filter-chip active' : 'ac-filter-chip');
-      return `
-        <button class="${cls}" onclick="acToggleCause('${c}')">
-          <span class="ac-cause-badge ${AC.CAUSE_CLASS[c]}">${c}</span>
-          <div style="min-width:0;">
-            <span class="ac-chip-count">${counts[c]}</span>
-            <div class="ac-chip-desc">${AC.CAUSE_SUGGEST[c]}</div>
-          </div>
-        </button>`;
-    }).join('') + `</div>`;
+// Compact clickable cause chips (badge + count) for the single-row header.
+// The cause meaning lives in the title tooltip to keep the row tight.
+function acCauseChips(counts, causeOrder, active) {
+  return causeOrder.filter(c => counts[c]).map(c => {
+    const cls = active === c ? 'ac-cchip active' : (active ? 'ac-cchip dim' : 'ac-cchip');
+    return `<button class="${cls}" onclick="acToggleCause('${c}')" title="${AC.CAUSE_SUGGEST[c]}">
+        <span class="ac-cause-badge ${AC.CAUSE_CLASS[c]}">${c}</span><b>${counts[c]}</b>
+      </button>`;
+  }).join('');
+}
+
+// Keep the topbar level toggle (counts + active state) in sync with the data.
+function acSyncLevelToggle(orderN, skuN, level) {
+  const set = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
+  set('acOrderCount', orderN); set('acSkuCount', skuN);
+  const ob = document.getElementById('acLevelOrderBtn'); if (ob) ob.classList.toggle('active', level === 'order');
+  const sb = document.getElementById('acLevelSkuBtn');   if (sb) sb.classList.toggle('active', level === 'sku');
 }
 
 function acSetLevel(level) {
@@ -542,42 +544,35 @@ function renderActionCenterPage() {
     return a.profit - b.profit; // most negative first
   });
 
+  acSyncLevelToggle(orderInsights.length, skuInsights.length, level);
+
   const subtitle = level === 'order'
     ? 'Recent orders · 5-day rolling (dropship) · last 3 days (coupon)'
     : `Follows Product Detail Time Range · ${typeof trDisplay === 'function' ? trDisplay() : 'All time'} (coupon: last 3 days)`;
 
+  const dlIcon = '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>';
+
+  // Single-row header: title · cause chips · downloads.
   const header = `
-    <div class="card" style="padding:18px 20px;margin-bottom:16px;">
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <span style="font-size:22px;">⚠️</span>
-        <div>
-          <div style="font-size:18px;font-weight:800;color:var(--text);">Profit &lt; 0</div>
-          <div style="font-size:12px;color:var(--text3);">Loss-making orders &amp; SKUs grouped by root cause — click a card to filter</div>
+    <div class="card" style="padding:14px 20px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:22px;">⚠️</span>
+          <div>
+            <div style="font-size:18px;font-weight:800;color:var(--text);">Profit &lt; 0</div>
+            <div style="font-size:12px;color:var(--text3);">Loss-making orders &amp; SKUs</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          ${Object.keys(counts).length
+            ? acCauseChips(counts, causeOrder, S.acCause)
+            : '<span style="font-size:13px;color:var(--text3);">No losses detected 🎉</span>'}
         </div>
         <div style="flex:1;"></div>
-        <div class="ac-level-toggle">
-          <button class="ac-level-btn ${level === 'order' ? 'active' : ''}" onclick="acSetLevel('order')">
-            Order Level <span class="ac-lvl-count">${orderInsights.length}</span>
-          </button>
-          <button class="ac-level-btn ${level === 'sku' ? 'active' : ''}" onclick="acSetLevel('sku')">
-            SKU Level <span class="ac-lvl-count">${skuInsights.length}</span>
-          </button>
+        <div class="dl-wrap" style="flex-direction:row;gap:8px;padding:6px 8px;">
+          <button class="dl-btn" onclick="acDownload('order')" title="Download all order-level insights (ignores the cause filter)">${dlIcon} Order CSV</button>
+          <button class="dl-btn" onclick="acDownload('sku')" title="Download all SKU-level insights (ignores the cause filter)">${dlIcon} SKU CSV</button>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <button class="dl-btn" onclick="acDownload('order')" title="Download all order-level insights (ignores the cause filter)">
-            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-            Order CSV
-          </button>
-          <button class="dl-btn" onclick="acDownload('sku')" title="Download all SKU-level insights (ignores the cause filter)">
-            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-            SKU CSV
-          </button>
-        </div>
-      </div>
-      <div style="margin-top:16px;">
-        ${Object.keys(counts).length
-          ? acLegend(counts, causeOrder, S.acCause)
-          : '<span style="font-size:13px;color:var(--text3);">No losses detected in this view 🎉</span>'}
       </div>
     </div>`;
 
