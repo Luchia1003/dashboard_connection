@@ -295,6 +295,13 @@
     /* Restock column — indigo, deliberately not the amber Amazon pill colour. */
     .ac-restock .ac-st-l, .ac-restock .ac-st-v b, .ac-restock .ac-st-v .k { color:#6366f1; }
 
+    /* Action Center tables: right-aligned numeric cells, optional order/net stack. */
+    #actionHead th, #actionBody td { vertical-align: top; }
+    td.num { text-align: right; white-space: nowrap; }
+    td.num .ln { white-space: nowrap; }
+    td.num .k  { color: var(--text3); font-size: 10px; margin-right: 4px; text-transform: uppercase; }
+    td.num.ac-restock b, td.num.ac-restock .k { color: #6366f1; }
+
     .ac-orderid { font-weight:700; font-size:14px; color:var(--text); font-family:monospace; word-break:break-all; }
     .ac-skubig  { font-weight:700; font-size:15px; color:var(--text); }
     .ac-skusmall{ font-weight:600; font-size:13px; color:var(--text2); }
@@ -896,10 +903,20 @@
 
     <!-- Action Center Section -->
     <section id="actionSection" style="display:none;">
-      <div id="actionBody">
-        <div class="skeleton" style="height:80px;margin-bottom:14px;"></div>
-        <div class="skeleton" style="height:200px;margin-bottom:14px;"></div>
-        <div class="skeleton" style="height:200px;"></div>
+      <!-- Header (Profit < 0 + cause chips + downloads) — stays fixed -->
+      <div id="actionHeader" style="margin-bottom:16px;">
+        <div class="skeleton" style="height:64px;"></div>
+      </div>
+      <!-- Table card: frozen column header, scrolling rows -->
+      <div class="card" style="overflow:hidden;">
+        <div style="overflow:auto;height:calc(100vh - 220px);">
+          <table>
+            <thead id="actionHead" style="position:sticky;top:0;z-index:10;background:var(--card);"></thead>
+            <tbody id="actionBody">
+              <tr><td style="text-align:center;padding:40px;color:var(--text3);">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 

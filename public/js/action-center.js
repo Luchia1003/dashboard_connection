@@ -49,10 +49,10 @@ function acRenderLoading() {
   const el = document.getElementById('actionBody');
   if (!el) return;
   el.innerHTML = `
-    <div class="card" style="padding:48px;text-align:center;color:var(--text3);">
+    <tr><td colspan="11" style="text-align:center;padding:48px;color:var(--text3);">
       <div style="display:inline-block;width:30px;height:30px;border:2px solid var(--border);border-top-color:#0ea5e9;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:12px;"></div>
       <div style="font-size:13px;">Crunching loss-making orders &amp; SKUs…</div>
-    </div>`;
+    </td></tr>`;
 }
 
 async function acFetchJSON(url) {
@@ -341,151 +341,111 @@ function acCauseCounts(list) {
   return c;
 }
 
-// One metric stat block (label on top, value below).
-function acStat(label, valHtml) {
-  return `<div class="ac-m"><div class="ac-m-l">${label}</div><div class="ac-m-v">${valHtml}</div></div>`;
-}
 function acColor(v) { return v < 0 ? '#ef4444' : 'var(--text)'; }
 
-// ── Order level row: data on top, insight below ───────────────────────────────
-function acOrderRow(i) {
-  const metrics = [
-    acStat('Product Sales', fmt(i.productSales)),
-    acStat('Sales Margin', `<span style="color:${acColor(i.salesMargin)};">${fmt(i.salesMargin)}</span>`),
-    acStat('Unit Cost', fmt(i.unitCost)),
-    acStat('Qty', Math.round(i.qty || 0).toLocaleString()),
-    i.dropshipFee ? acStat('DS Fee', `<span style="color:#f59e0b;">${fmt(i.dropshipFee)}</span>`) : '',
-    i.couponFee   ? acStat('Coupon Fee', `<span style="color:#a855f7;">${fmt(i.couponFee)}</span>`) : '',
-  ].join('');
-
-  // Attribution line — only for non-PRICING (PRICING is self-evident from the title).
-  let explain = '';
-  if (i.cause === 'DROPSHIP') explain = `pre-dropship ${fmt(i.preFreeProfit)} · DS fee ${fmt(i.dropshipFee)}`;
-  else if (i.cause === 'COUPON') explain = `pre-coupon ${fmt(i.preFreeProfit)} · coupon ${fmt(i.couponFee)}`;
-
-  const missing = !i.productSales
-    ? `<span class="ac-missing">⚠ possibly missing data</span>` : '';
-
-  return `
-    <div class="ac-row ac-orow">
-      <div class="ac-a-badge"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></div>
-      <div class="ac-a-orderid ac-orderid">${i.orderId || '—'}</div>
-      <div class="ac-a-sku ac-skusmall">${i.sku || '—'}</div>
-      <div class="ac-a-metrics ac-metrics">${metrics}</div>
-      <div class="ac-a-flags">${acPlatPill(i.platform)}${missing}</div>
-      <div class="ac-a-profit">
-        <div class="ac-plabel">Profit</div>
-        <div class="ac-loss">${fmt(i.profit)}</div>
-        ${explain ? `<div class="ac-explain">${explain}</div>` : ''}
-      </div>
-    </div>`;
-}
-
-// Restock warning tag — only when the system still suggests restocking (spec §3.2).
-// One label/value(s) column: label on top, value block below.
-function acStatCol(label, body, restock) {
-  return `<div class="ac-st${restock ? ' ac-restock' : ''}"><div class="ac-st-l">${label}</div><div class="ac-st-v">${body}</div></div>`;
-}
-// A keyed value line, e.g. "order $26.0K" / "net $25.3K" / "FBA 116".
+// A keyed value line inside a cell, e.g. "order $26.0K" / "net $25.3K".
 function acKV(key, valHtml) {
   return `<div class="ln"><span class="k">${key}</span>${valHtml}</div>`;
 }
-// Stacked order/net lines; net reddened when negative (it's the realised figure).
-function acDualKV(orderVal, netVal, money) {
+// A right-aligned cell with stacked order/net lines (net reddened when negative).
+function acDualCell(orderVal, netVal, money, single) {
   const f = v => money ? fmt(v) : Math.round(v || 0).toLocaleString();
-  return acKV('order', `<b>${f(orderVal)}</b>`) +
-         acKV('net', `<b style="color:${Number(netVal) < 0 ? '#ef4444' : 'var(--text)'};">${f(netVal)}</b>`);
+  if (single) return `<td class="num"><b>${f(netVal)}</b></td>`;
+  return `<td class="num">` +
+    acKV('order', `<b>${f(orderVal)}</b>`) +
+    acKV('net', `<b style="color:${Number(netVal) < 0 ? '#ef4444' : 'var(--text)'};">${f(netVal)}</b>`) +
+    `</td>`;
+}
+const acDash = '<span style="color:var(--text3);">—</span>';
+
+// ── Frozen column headers ─────────────────────────────────────────────────────
+function acOrderHead() {
+  return `<tr>
+    <th style="text-align:left;">Cause</th>
+    <th style="text-align:left;">Order ID / SKU</th>
+    <th style="text-align:left;">Platform</th>
+    <th>DS Fee</th>
+    <th>Product Sales</th>
+    <th>Sales Margin</th>
+    <th>Unit Cost</th>
+    <th>Qty</th>
+    <th>Profit</th>
+  </tr>`;
+}
+function acSkuHead() {
+  return `<tr>
+    <th style="text-align:left;">Cause</th>
+    <th style="text-align:left;">SKU</th>
+    <th style="text-align:left;">Platform</th>
+    <th>Inventory</th>
+    <th>Product Sales</th>
+    <th>Sales Margin</th>
+    <th>Quantity</th>
+    <th>Unit Cost</th>
+    <th>Return Rate</th>
+    <th>Restock</th>
+    <th>Profit</th>
+  </tr>`;
 }
 
-// ── SKU level (PRICING / RETURN) — tabular columns ────────────────────────────
-// Each metric is a column: label on top, value(s) below. Inventory → FBA/Whse;
-// Sales/Margin/Qty → order/net; Unit Cost/Return Rate → a single number;
-// Restock (when suggested) sits between Return Rate and Profit; Profit is far
-// right with net (realised) over order (pre-return).
-function acSkuPRRow(i) {
-  const inv = (typeof inventoryForView === 'function')
-    ? inventoryForView(i.sku, i.platform) : { found: false };
-  let invBody;
-  if (!inv.found) invBody = '<b style="color:var(--text3);">—</b>';
-  else if (inv.split) invBody = acKV('FBA', `<b>${Math.round(inv.fba).toLocaleString()}</b>`) +
-                                 acKV('Whse', `<b>${Math.round(inv.hnp).toLocaleString()}</b>`);
-  else invBody = acKV('Whse', `<b>${Math.round(inv.hnp).toLocaleString()}</b>`);
+// ── Order level table row ─────────────────────────────────────────────────────
+function acOrderTr(i) {
+  const missing = !i.productSales
+    ? `<div style="margin-top:5px;"><span class="ac-missing">⚠ possibly missing data</span></div>` : '';
+  let explain = '';
+  if (i.cause === 'DROPSHIP') explain = `pre-dropship ${fmt(i.preFreeProfit)} · DS fee ${fmt(i.dropshipFee)}`;
+  else if (i.cause === 'COUPON') explain = `pre-coupon ${fmt(i.preFreeProfit)} · coupon ${fmt(i.couponFee)}`;
+  return `<tr>
+    <td style="text-align:left;"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></td>
+    <td style="text-align:left;"><div class="ac-orderid">${i.orderId || '—'}</div><div class="ac-skusmall">${i.sku || '—'}</div></td>
+    <td style="text-align:left;">${acPlatPill(i.platform) || acDash}${missing}</td>
+    <td class="num">${i.dropshipFee ? `<b style="color:#f59e0b;">${fmt(i.dropshipFee)}</b>` : acDash}</td>
+    <td class="num"><b>${fmt(i.productSales)}</b></td>
+    <td class="num"><b style="color:${acColor(i.salesMargin)};">${fmt(i.salesMargin)}</b></td>
+    <td class="num"><b>${fmt(i.unitCost)}</b></td>
+    <td class="num"><b>${Math.round(i.qty || 0).toLocaleString()}</b></td>
+    <td class="num"><div class="ac-loss">${fmt(i.profit)}</div>${explain ? `<div class="ac-explain">${explain}</div>` : ''}</td>
+  </tr>`;
+}
+
+// ── SKU level table row (handles PRICING/RETURN and COUPON) ───────────────────
+function acSkuTr(i) {
+  const coupon = i.skuKind === 'coupon';
+  const inv = (typeof inventoryForView === 'function') ? inventoryForView(i.sku, i.platform) : { found: false };
+  let invCell;
+  if (!inv.found) invCell = `<td class="num">${acDash}</td>`;
+  else if (inv.split) invCell = `<td class="num">${acKV('FBA', `<b>${Math.round(inv.fba).toLocaleString()}</b>`)}${acKV('Whse', `<b>${Math.round(inv.hnp).toLocaleString()}</b>`)}</td>`;
+  else invCell = `<td class="num">${acKV('Whse', `<b>${Math.round(inv.hnp).toLocaleString()}</b>`)}</td>`;
 
   const rrHigh = i.returnRate != null && i.returnRate > 0.10;
-  const rrBody = i.returnRate != null
-    ? `<b style="color:${rrHigh ? '#f59e0b' : 'var(--text)'};">${fmt(i.returnRate, 'pct')}</b>`
-    : '<b style="color:var(--text3);">—</b>';
+  const rrCell = coupon || i.returnRate == null
+    ? `<td class="num">${acDash}</td>`
+    : `<td class="num"><b style="color:${rrHigh ? '#f59e0b' : 'var(--text)'};">${fmt(i.returnRate, 'pct')}</b></td>`;
 
-  // Restock column — only when the system still suggests it (spec §3.2).
   const rs = (typeof lookupRestock === 'function') ? lookupRestock(i.platform, i.sku) : null;
-  const restockCol = rs
-    ? acStatCol('Restock',
-        acKV('suggest', `<b>${Math.round(rs.units).toLocaleString()}</b>`) +
-        (rs.profit < 0 ? acKV('est loss', `<b>${fmt(Math.abs(rs.profit))}</b>`) : ''),
-        true)
-    : '';
+  const restockCell = rs
+    ? `<td class="num ac-restock">${acKV('suggest', `<b>${Math.round(rs.units).toLocaleString()}</b>`)}${rs.profit < 0 ? acKV('est loss', `<b>${fmt(Math.abs(rs.profit))}</b>`) : ''}</td>`
+    : `<td class="num">${acDash}</td>`;
 
-  const metrics =
-    acStatCol('Inventory', invBody) +
-    acStatCol('Product Sales', acDualKV(i.orderSales, i.netSales, true)) +
-    acStatCol('Sales Margin', acDualKV(i.orderMargin, i.netMargin, true)) +
-    acStatCol('Quantity', acDualKV(i.orderQty, i.netQty, false)) +
-    acStatCol('Unit Cost', `<b>${fmt(i.unitCost)}</b>`) +
-    acStatCol('Return Rate', rrBody) +
-    restockCol;
+  // Profit cell: net (realised, larger) over order (pre-return). Coupon rows have
+  // only one profit + a coupon attribution line.
+  const profitCell = coupon
+    ? `<td class="num"><b class="ac-loss">${fmt(i.profit)}</b><div class="ac-explain">pre-coupon ${fmt(i.preFreeProfit)} · coupon ${fmt(i.couponFee)}</div></td>`
+    : `<td class="num">${acKV('net', `<b style="color:${acColor(i.netProfit)};font-size:18px;">${fmt(i.netProfit)}</b>`)}${acKV('order', `<b style="color:${acColor(i.orderProfit)};">${fmt(i.orderProfit)}</b>`)}</td>`;
 
-  const profitCol = `<div class="ac-st ac-st-right">
-      <div class="ac-st-l">Profit</div>
-      <div class="ac-st-v">
-        ${acKV('net', `<b style="color:${acColor(i.netProfit)};font-size:19px;">${fmt(i.netProfit)}</b>`)}
-        ${acKV('order', `<b style="color:${acColor(i.orderProfit)};">${fmt(i.orderProfit)}</b>`)}
-      </div>
-    </div>`;
-
-  return `
-    <div class="ac-row ac-srow">
-      <div class="ac-a-badge"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></div>
-      <div class="ac-s-ident">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span class="ac-skubig">${i.sku || '—'}</span>${acPlatPill(i.platform)}
-        </div>
-      </div>
-      <div class="ac-s-metrics"><div class="ac-metrics-row">${metrics}</div></div>
-      <div class="ac-s-profit">${profitCol}</div>
-    </div>`;
-}
-
-// ── SKU level (COUPON): single totals + coupon fee ───────────────────────────
-function acSkuCouponRow(i) {
-  const metrics = [
-    acStat('Product Sales', fmt(i.productSales)),
-    acStat('Margin', `<span style="color:${acColor(i.salesMargin)};">${fmt(i.salesMargin)}</span>`),
-    acStat('Unit Cost', fmt(i.unitCost)),
-    acStat('Qty', Math.round(i.qty || 0).toLocaleString()),
-    acStat('Coupon Fee', `<span style="color:#a855f7;">${fmt(i.couponFee)}</span>`),
-  ].join('');
-
-  return `
-    <div class="ac-row ac-srow">
-      <div class="ac-a-badge"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></div>
-      <div class="ac-s-ident">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span class="ac-skubig">${i.sku || '—'}</span>${acPlatPill(i.platform)}
-        </div>
-      </div>
-      <div class="ac-s-metrics ac-metrics">${metrics}</div>
-      <div class="ac-s-profit">
-        <div class="ac-plabel">Profit</div>
-        <div class="ac-loss">${fmt(i.profit)}</div>
-        <div class="ac-explain">pre-coupon ${fmt(i.preFreeProfit)} · coupon ${fmt(i.couponFee)}</div>
-      </div>
-    </div>`;
-}
-
-function acRow(i) {
-  if (i.level === 'order') return acOrderRow(i);
-  if (i.skuKind === 'coupon') return acSkuCouponRow(i);
-  return acSkuPRRow(i);
+  return `<tr>
+    <td style="text-align:left;"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></td>
+    <td style="text-align:left;"><span class="ac-skubig">${i.sku || '—'}</span></td>
+    <td style="text-align:left;">${acPlatPill(i.platform) || acDash}</td>
+    ${invCell}
+    ${acDualCell(i.orderSales, coupon ? i.productSales : i.netSales, true, coupon)}
+    ${acDualCell(i.orderMargin, coupon ? i.salesMargin : i.netMargin, true, coupon)}
+    ${acDualCell(i.orderQty, coupon ? i.qty : i.netQty, false, coupon)}
+    <td class="num"><b>${fmt(i.unitCost)}</b></td>
+    ${rrCell}
+    ${restockCell}
+    ${profitCell}
+  </tr>`;
 }
 
 // Compact clickable cause chips (badge + count) for the single-row header.
@@ -521,8 +481,10 @@ function acToggleCause(cause) {
 window.acToggleCause = acToggleCause;
 
 function renderActionCenterPage() {
-  const el = document.getElementById('actionBody');
-  if (!el) return;
+  const headEl = document.getElementById('actionHead');
+  const bodyEl = document.getElementById('actionBody');
+  const hdrEl  = document.getElementById('actionHeader');
+  if (!bodyEl || !headEl || !hdrEl) return;
   const ready = Array.isArray(S.orderDetail) && Array.isArray(S.couponOrder) &&
                 Array.isArray(S.couponSku)   && Array.isArray(S.sku);
   if (!ready) { loadActionCenterData(); return; }
@@ -552,15 +514,16 @@ function renderActionCenterPage() {
 
   const dlIcon = '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>';
 
-  // Single-row header: title · cause chips · downloads.
-  const header = `
-    <div class="card" style="padding:14px 20px;margin-bottom:16px;">
+  // Header card (stays fixed above the scrolling table): title · subtitle ·
+  // cause chips · downloads.
+  hdrEl.innerHTML = `
+    <div class="card" style="padding:14px 20px;">
       <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:22px;">⚠️</span>
           <div>
             <div style="font-size:18px;font-weight:800;color:var(--text);">Profit &lt; 0</div>
-            <div style="font-size:12px;color:var(--text3);">Loss-making orders &amp; SKUs</div>
+            <div style="font-size:12px;color:var(--text3);">${level === 'order' ? 'Order Level' : 'SKU Level'} · ${subtitle} · <b style="color:#ef4444;">${list.length}${S.acCause ? ` / ${fullList.length}` : ''}</b></div>
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
@@ -576,21 +539,13 @@ function renderActionCenterPage() {
       </div>
     </div>`;
 
-  const body = list.length
-    ? list.map(acRow).join('')
-    : `<div class="ac-empty">${S.acCause ? `No ${S.acCause} ${level === 'order' ? 'orders' : 'SKUs'}` : `No loss-making ${level === 'order' ? 'orders' : 'SKUs'} 🎉`}</div>`;
+  headEl.innerHTML = level === 'order' ? acOrderHead() : acSkuHead();
 
-  const section = `
-    <div class="card" style="overflow:hidden;">
-      <div class="ac-section-title">
-        <h3 style="font-size:15px;font-weight:700;color:var(--text);">${level === 'order' ? 'Order Level' : 'SKU Level'}</h3>
-        <span style="font-size:12px;color:var(--text3);">${subtitle}</span>
-        <div style="flex:1;"></div>
-        <span style="font-size:13px;font-weight:700;color:${list.length ? '#ef4444' : 'var(--text3)'};">${list.length}${S.acCause ? ` / ${fullList.length}` : ''}</span>
-      </div>
-      <div>${body}</div>
-    </div>`;
-
-  el.innerHTML = header + section;
+  if (!list.length) {
+    const msg = S.acCause ? `No ${S.acCause} ${level === 'order' ? 'orders' : 'SKUs'}` : `No loss-making ${level === 'order' ? 'orders' : 'SKUs'} 🎉`;
+    bodyEl.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    return;
+  }
+  bodyEl.innerHTML = list.map(level === 'order' ? acOrderTr : acSkuTr).join('');
 }
 window.renderActionCenterPage = renderActionCenterPage;
