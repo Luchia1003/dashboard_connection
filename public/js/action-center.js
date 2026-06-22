@@ -364,6 +364,7 @@ function acOrderHead() {
     <th style="text-align:left;">Cause</th>
     <th style="text-align:left;">Order ID / SKU</th>
     <th style="text-align:left;">Platform</th>
+    <th>Order Date</th>
     <th>DS Fee</th>
     <th>Product Sales</th>
     <th>Sales Margin</th>
@@ -399,6 +400,7 @@ function acOrderTr(i) {
     <td style="text-align:left;"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></td>
     <td style="text-align:left;"><div class="ac-orderid">${i.orderId || '—'}</div><div class="ac-skusmall">${i.sku || '—'}</div></td>
     <td style="text-align:left;">${acPlatPill(i.platform) || acDash}${missing}</td>
+    <td class="num" style="color:var(--text2);">${i.orderDate || acDash}</td>
     <td class="num">${i.dropshipFee ? `<b style="color:#f59e0b;">${fmt(i.dropshipFee)}</b>` : acDash}</td>
     <td class="num"><b>${fmt(i.productSales)}</b></td>
     <td class="num"><b style="color:${acColor(i.salesMargin)};">${fmt(i.salesMargin)}</b></td>
