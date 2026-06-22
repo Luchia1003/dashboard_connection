@@ -77,7 +77,7 @@ async function loadOrderDetailData() {
   if (S.orderDetail) { renderOrderDetailPage(); return; }
 
   document.getElementById('orderDetailBody').innerHTML =
-    `<tr><td colspan="12" style="text-align:center;padding:48px;color:var(--text3);">
+    `<tr><td colspan="13" style="text-align:center;padding:48px;color:var(--text3);">
        <div style="display:inline-block;width:28px;height:28px;border:2px solid var(--border);border-top-color:#0ea5e9;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px;"></div>
        <div>Loading order data…</div>
      </td></tr>`;
@@ -91,7 +91,7 @@ async function loadOrderDetailData() {
     renderOrderDetailPage();
   } catch (err) {
     document.getElementById('orderDetailBody').innerHTML =
-      `<tr><td colspan="12" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
+      `<tr><td colspan="13" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
   }
 }
 window.loadOrderDetailData = loadOrderDetailData;
@@ -139,7 +139,7 @@ function renderOrderDetailPage() {
   const tbody = document.getElementById('orderDetailBody');
   if (!rows.length) {
     const msg = query ? `No orders matching "${searchRaw}"` : 'No data for selected period';
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
 
@@ -159,6 +159,10 @@ function renderOrderDetailPage() {
     const dsFeeCell   = dsFee > 0
       ? `<span style="${V}color:var(--text2);">${fmt(dsFee)}</span>`
       : `<span style="color:var(--text3);">—</span>`;
+    const shipFee     = Number(r.SHIPPING_FEE) || 0;
+    const shipFeeCell = shipFee > 0
+      ? `<span style="${V}color:var(--text2);">${fmt(shipFee)}</span>`
+      : `<span style="color:var(--text3);">—</span>`;
     return `
     <tr>
       <td style="text-align:right;font-size:12px;color:var(--text3);">${i + 1}</td>
@@ -167,6 +171,7 @@ function renderOrderDetailPage() {
       <td style="text-align:right;"><span style="font-size:11px;font-weight:600;color:${platColor};background:${platBg};padding:2px 8px;border-radius:6px;">${plat || '—'}</span></td>
       <td style="text-align:right;">${dsBadge}</td>
       <td style="text-align:right;">${dsFeeCell}</td>
+      <td style="text-align:right;">${shipFeeCell}</td>
       <td style="text-align:right;font-size:12px;color:var(--text2);">${String(r.ORDER_DATE || '—').slice(0, 10)}</td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${Math.round(Number(r.QTY) || 0).toLocaleString()}</span></td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmt(Number(r.PRODUCT_SALES) || 0)}</span></td>

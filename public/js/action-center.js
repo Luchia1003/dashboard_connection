@@ -124,6 +124,7 @@ function acOrderPricingDropship() {
       profit, preFreeProfit: preFee,
       productSales: acNum(r.PRODUCT_SALES),
       salesMargin, unitCost, qty, dropshipFee,
+      shippingFee: acNum(r.SHIPPING_FEE),
     });
   });
   return out;
@@ -152,6 +153,7 @@ function acOrderCoupon() {
       productSales: acNum(r.PRODUCT_SALES),
       salesMargin, unitCost, qty,
       couponFee: acNum(r.COUPON_FEE),
+      shippingFee: acNum(r.SHIPPING_FEE),
     });
   });
   return out;
@@ -277,7 +279,7 @@ function acBuildInsights() {
 // ── CSV download (all order-level / all SKU-level insights) ───────────────────
 
 const AC_ORDER_COLS = ['CAUSE', 'ORDER_ID', 'SKU', 'PLATFORM', 'ORDER_DATE', 'QTY',
-  'PRODUCT_SALES', 'SALES_MARGIN', 'UNIT_COST', 'DROPSHIP_FEE', 'COUPON_FEE',
+  'PRODUCT_SALES', 'SALES_MARGIN', 'UNIT_COST', 'DROPSHIP_FEE', 'SHIPPING_FEE', 'COUPON_FEE',
   'PRE_FEE_PROFIT', 'PROFIT'];
 const AC_SKU_COLS = ['CAUSE', 'SKU', 'PLATFORM', 'ORDER_PROFIT', 'NET_PROFIT',
   'ORDER_PRODUCT_SALES', 'NET_PRODUCT_SALES', 'ORDER_MARGIN', 'NET_MARGIN',
@@ -292,6 +294,7 @@ function acOrderCsvRow(i) {
     ORDER_DATE: i.orderDate || '', QTY: i.qty,
     PRODUCT_SALES: acRound(i.productSales), SALES_MARGIN: acRound(i.salesMargin),
     UNIT_COST: acRound(i.unitCost), DROPSHIP_FEE: i.dropshipFee ? acRound(i.dropshipFee) : '',
+    SHIPPING_FEE: i.shippingFee ? acRound(i.shippingFee) : '',
     COUPON_FEE: i.couponFee ? acRound(i.couponFee) : '',
     PRE_FEE_PROFIT: acRound(i.preFreeProfit), PROFIT: acRound(i.profit),
   };
@@ -366,6 +369,7 @@ function acOrderHead() {
     <th style="text-align:left;">Platform</th>
     <th>Order Date</th>
     <th>DS Fee</th>
+    <th>Shipping</th>
     <th>Product Sales</th>
     <th>Sales Margin</th>
     <th>Unit Cost</th>
@@ -402,6 +406,7 @@ function acOrderTr(i) {
     <td style="text-align:left;">${acPlatPill(i.platform) || acDash}${missing}</td>
     <td class="num" style="color:var(--text2);">${i.orderDate || acDash}</td>
     <td class="num">${i.dropshipFee ? `<b style="color:#f59e0b;">${fmt(i.dropshipFee)}</b>` : acDash}</td>
+    <td class="num">${i.shippingFee ? `<b style="color:var(--text2);">${fmt(i.shippingFee)}</b>` : acDash}</td>
     <td class="num"><b>${fmt(i.productSales)}</b></td>
     <td class="num"><b style="color:${acColor(i.salesMargin)};">${fmt(i.salesMargin)}</b></td>
     <td class="num"><b>${fmt(i.unitCost)}</b></td>

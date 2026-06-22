@@ -193,6 +193,7 @@ function renderCouponOrderTable() {
       <th style="min-width:120px;">Product Sales</th>
       <th style="min-width:120px;">Sales Margin</th>
       <th style="min-width:120px;">Coupon Fee</th>
+      <th style="min-width:110px;">Shipping</th>
       <th style="min-width:120px;">New Margin</th>
       <th style="min-width:120px;">Profit</th>
       <th style="min-width:110px;">Unit Cost</th>
@@ -226,7 +227,7 @@ function renderCouponOrderTable() {
 
   const tbody = document.getElementById('couponBody');
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text3);">${query ? `No orders matching "${searchRaw}"` : 'No data for selected period'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text3);">${query ? `No orders matching "${searchRaw}"` : 'No data for selected period'}</td></tr>`;
     return;
   }
 
@@ -245,6 +246,7 @@ function renderCouponOrderTable() {
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmt(Number(r.PRODUCT_SALES) || 0)}</span></td>
       <td style="text-align:right;"><span style="${V}color:${salesMargin < 0 ? '#ef4444' : 'var(--text)'};">${fmt(salesMargin)}</span></td>
       <td style="text-align:right;"><span style="${V}color:#f59e0b;">${fmt(Number(r.COUPON_FEE) || 0)}</span></td>
+      <td style="text-align:right;">${(Number(r.SHIPPING_FEE) || 0) > 0 ? `<span style="${V}color:var(--text2);">${fmt(Number(r.SHIPPING_FEE) || 0)}</span>` : `<span style="color:var(--text3);">—</span>`}</td>
       <td style="text-align:right;"><span style="${V}color:${newMargin < 0 ? '#ef4444' : '#10b981'};">${fmt(newMargin)}</span></td>
       <td style="text-align:right;"><span style="${V}color:${profit < 0 ? '#ef4444' : '#10b981'};">${fmt(profit)}</span></td>
       <td style="text-align:right;"><span style="${V}color:var(--text2);">${fmt(Number(r.UNIT_COST) || 0)}</span></td>
