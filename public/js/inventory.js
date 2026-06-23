@@ -13,7 +13,7 @@ async function loadInventoryData() {
 
   document.getElementById('inventoryHead').innerHTML = '';
   document.getElementById('inventoryBody').innerHTML =
-    `<tr><td colspan="16" style="text-align:center;padding:48px;color:var(--text3);">
+    `<tr><td colspan="18" style="text-align:center;padding:48px;color:var(--text3);">
        <div style="display:inline-block;width:28px;height:28px;border:2px solid var(--border);border-top-color:#0ea5e9;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px;"></div>
        <div>Loading inventory data…</div>
      </td></tr>`;
@@ -30,10 +30,11 @@ async function loadInventoryData() {
     S.inventoryForecast = await fr.json();
     S.fbaAging          = await ar.json();
 
+    populateForecastManufacturers();
     renderInventoryPage();
   } catch (err) {
     document.getElementById('inventoryBody').innerHTML =
-      `<tr><td colspan="16" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
+      `<tr><td colspan="18" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
   }
 }
 window.loadInventoryData = loadInventoryData;
@@ -104,6 +105,31 @@ function channelChip(ch) {
   return `<span style="font-size:11px;font-weight:600;color:${color.fg};background:${color.bg};padding:2px 8px;border-radius:6px;white-space:nowrap;">${label}</span>`;
 }
 
+// Manufacturer chip — muted "Unknown" when MASTER_COST has no supplier.
+function manufacturerChip(m) {
+  const s = String(m || '').trim();
+  if (!s) return `<span style="font-size:11px;color:var(--text3);">Unknown</span>`;
+  return `<span style="font-size:11px;font-weight:600;color:var(--text2);background:var(--input);border:1px solid var(--border);padding:2px 8px;border-radius:6px;white-space:nowrap;">${s}</span>`;
+}
+
+// Populate the Manufacturer filter from the data (distinct values + Unknown).
+function populateForecastManufacturers() {
+  const sel = document.getElementById('forecastManufacturer');
+  if (!sel) return;
+  let hasUnknown = false;
+  const set = new Set();
+  (S.inventoryForecast || []).forEach(r => {
+    const m = String(r.MANUFACTURER || '').trim();
+    if (m) set.add(m); else hasUnknown = true;
+  });
+  const opts = [...set].sort((a, b) => a.localeCompare(b));
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">All</option>` +
+    opts.map(m => `<option value="${m}">${m}</option>`).join('') +
+    (hasUnknown ? `<option value="__unknown__">Unknown</option>` : '');
+  if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+
 function statusBadge(status) {
   const s = String(status || '');
   if (s === 'Out of Stock')    return `<span class="badge-down" style="font-size:10px;padding:2px 7px;border-radius:6px;font-weight:600;">${s}</span>`;
@@ -140,6 +166,7 @@ function priorityBadge(p) {
 function renderForecastTable() {
   const channel  = (document.getElementById('forecastChannel') || {}).value || 'total';
   const status   = (document.getElementById('forecastStatus')  || {}).value || '';
+  const manufacturer = (document.getElementById('forecastManufacturer') || {}).value || '';
   const sortBy   = (document.getElementById('forecastSort')    || {}).value || 'restock_needed';
   const sortDir  = (document.getElementById('forecastDir')     || {}).value || 'desc';
   const searchRaw = (document.getElementById('forecastSearch') || {}).value || '';
@@ -154,6 +181,7 @@ function renderForecastTable() {
       <th style="text-align:right;min-width:40px;width:40px;">#</th>
       <th style="text-align:left;min-width:200px;">SKU / Product</th>
       <th style="min-width:110px;">Channel</th>
+      <th style="text-align:left;min-width:110px;">Manufacturer</th>
       <th style="min-width:90px;">Available</th>
       <th style="min-width:110px;">Last Order</th>
       <th style="min-width:80px;">Days Since</th>
@@ -165,6 +193,7 @@ function renderForecastTable() {
       <th style="min-width:110px;">Restock Need</th>
       <th style="min-width:100px;">Profit / Unit</th>
       <th style="min-width:120px;">Est Restock Profit</th>
+      <th style="min-width:120px;">Est Restock Cost</th>
       <th style="min-width:90px;">Threshold</th>
       <th style="min-width:140px;">Status</th>
     </tr>`;
@@ -177,6 +206,13 @@ function renderForecastTable() {
     rows = rows.filter(r => String(r.RESTOCK_THRESHOLD_MET || '') === 'Y');
   } else if (status) {
     rows = rows.filter(r => String(r.INVENTORY_STATUS || '') === status);
+  }
+
+  // Filter by manufacturer ('__unknown__' = null/blank in MASTER_COST)
+  if (manufacturer === '__unknown__') {
+    rows = rows.filter(r => !r.MANUFACTURER || !String(r.MANUFACTURER).trim());
+  } else if (manufacturer) {
+    rows = rows.filter(r => String(r.MANUFACTURER || '') === manufacturer);
   }
 
   // Search
@@ -199,6 +235,7 @@ function renderForecastTable() {
     restock_needed:        r => Number(r.RESTOCK_NEEDED)       || 0,
     profit_per_unit:       r => Number(r.PROFIT_PER_UNIT)      || 0,
     est_restock_profit:    r => Number(r.EST_RESTOCK_PROFIT)   || 0,
+    est_restock_cost:      r => Number(r.EST_RESTOCK_COST)     || 0,
   }[sortBy] || (r => Number(r.RESTOCK_NEEDED) || 0);
 
   rows.sort((a, b) => {
@@ -218,7 +255,7 @@ function renderForecastTable() {
   const tbody = document.getElementById('inventoryBody');
   if (!rows.length) {
     const msg = query ? `No SKUs matching "${searchRaw}"` : 'No inventory rows for this channel';
-    tbody.innerHTML = `<tr><td colspan="16" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="18" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
 
@@ -231,10 +268,13 @@ function renderForecastTable() {
     const days         = Number(r.DAYS_SINCE_LAST_ORDER);
     const ppu          = r.PROFIT_PER_UNIT;
     const estProfit    = r.EST_RESTOCK_PROFIT;
+    const estCost      = r.EST_RESTOCK_COST;
     const ppuNum       = Number(ppu);
     const estNum       = Number(estProfit);
+    const estCostNum   = Number(estCost);
     const ppuMissing   = ppu == null || isNaN(ppuNum);
     const estMissing   = estProfit == null || isNaN(estNum);
+    const estCostMissing = estCost == null || isNaN(estCostNum);
     const availColor   = avail === 0 ? '#ef4444' : avail < fc60d ? '#f59e0b' : 'var(--text)';
     const needColor    = restockNeed > 0 ? '#ef4444' : 'var(--text3)';
     const daysColor    = days > 30 ? '#f59e0b' : 'var(--text2)';
@@ -249,6 +289,7 @@ function renderForecastTable() {
         ${r.PRODUCT_NAME ? `<div style="font-size:11px;color:var(--text3);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.PRODUCT_NAME}">${r.PRODUCT_NAME}</div>` : ''}
       </td>
       <td style="text-align:right;">${channelChip(r.CHANNEL)}</td>
+      <td style="text-align:left;">${manufacturerChip(r.MANUFACTURER)}</td>
       <td style="text-align:right;"><span style="${V}color:${availColor};">${fmtInt(avail)}</span></td>
       <td style="text-align:right;font-size:12px;color:var(--text2);">${fmtDate(r.LAST_ORDER_DATE)}</td>
       <td style="text-align:right;"><span style="font-size:13px;font-weight:600;color:${daysColor};">${isNaN(days) ? '—' : days}</span></td>
@@ -263,6 +304,7 @@ function renderForecastTable() {
       <td style="text-align:right;"><span style="${V}color:${needColor};">${fmtInt(restockNeed)}</span></td>
       <td style="text-align:right;"><span style="${V}color:${ppuColor};">${ppuMissing ? '—' : fmt(ppuNum)}</span></td>
       <td style="text-align:right;"><span style="${V}color:${estColor};">${estMissing ? '—' : fmt(estNum)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:${estCostMissing ? 'var(--text3)' : 'var(--text)'};">${estCostMissing ? '—' : fmt(estCostNum)}</span></td>
       <td style="text-align:right;">${thresholdBadge(r.RESTOCK_THRESHOLD_MET)}</td>
       <td style="text-align:right;">${statusBadge(r.INVENTORY_STATUS)}</td>
     </tr>`;

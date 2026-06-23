@@ -200,11 +200,18 @@ function downloadInventoryCSV() {
     } else if (statusRaw) {
       rows = rows.filter(r => String(r.INVENTORY_STATUS || '') === statusRaw);
     }
+    const mfr = (document.getElementById('forecastManufacturer') || {}).value || '';
+    if (mfr === '__unknown__') {
+      rows = rows.filter(r => !r.MANUFACTURER || !String(r.MANUFACTURER).trim());
+    } else if (mfr) {
+      rows = rows.filter(r => String(r.MANUFACTURER || '') === mfr);
+    }
 
     const statusSlug = !statusRaw ? 'all'
       : statusRaw === 'threshold' ? 'threshold_met'
       : statusRaw.toLowerCase().replace(/\s+/g, '_');
-    downloadCSV(rows, `inventory_forecast_${channel}_${statusSlug}_${todayStamp()}.csv`);
+    const mfrSlug = mfr === '__unknown__' ? '_unknown' : mfr ? `_${mfr.toLowerCase().replace(/\s+/g, '_')}` : '';
+    downloadCSV(rows, `inventory_forecast_${channel}_${statusSlug}${mfrSlug}_${todayStamp()}.csv`);
   } else {
     const whSel  = document.getElementById('agingChannel');
     const priSel = document.getElementById('agingPriority');

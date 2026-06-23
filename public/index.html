@@ -818,11 +818,16 @@
             <option value="Sufficient">Sufficient</option>
             <option value="threshold">Threshold met (Y)</option>
           </select>
+          <span style="font-size:12px;color:var(--text3);">Manufacturer</span>
+          <select id="forecastManufacturer" class="ctrl-sel" style="min-width:120px;" onchange="renderInventoryPage()">
+            <option value="">All</option>
+          </select>
           <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
           <span style="font-size:12px;color:var(--text3);">Sort</span>
           <select id="forecastSort" class="ctrl-sel" onchange="renderInventoryPage()">
             <option value="restock_needed">Restock Needed</option>
             <option value="est_restock_profit">Est Restock Profit</option>
+            <option value="est_restock_cost">Est Restock Cost</option>
             <option value="profit_per_unit">Profit / Unit</option>
             <option value="forecast_60d">Forecast 60d</option>
             <option value="available">Available</option>
