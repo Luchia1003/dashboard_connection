@@ -105,11 +105,27 @@ function channelChip(ch) {
   return `<span style="font-size:11px;font-weight:600;color:${color.fg};background:${color.bg};padding:2px 8px;border-radius:6px;white-space:nowrap;">${label}</span>`;
 }
 
-// Manufacturer chip — muted "Unknown" when MASTER_COST has no supplier.
+// Distinct colour per manufacturer; muted "Unknown" when MASTER_COST has none.
+const MFR_COLORS = {
+  toklat:        { fg: '#0ea5e9', bg: 'rgba(14,165,233,.12)',  bd: 'rgba(14,165,233,.3)'  }, // blue
+  weaver:        { fg: '#a16207', bg: 'rgba(161,98,7,.12)',    bd: 'rgba(161,98,7,.3)'    }, // brown
+  shires:        { fg: '#10b981', bg: 'rgba(16,185,129,.12)',  bd: 'rgba(16,185,129,.3)'  }, // green
+  prochoice:     { fg: '#8b5cf6', bg: 'rgba(139,92,246,.12)',  bd: 'rgba(139,92,246,.3)'  }, // violet
+  equibrand:     { fg: '#0d9488', bg: 'rgba(13,148,136,.12)',  bd: 'rgba(13,148,136,.3)'  }, // teal
+  doggie_design: { fg: '#ec4899', bg: 'rgba(236,72,153,.12)',  bd: 'rgba(236,72,153,.3)'  }, // pink
+  zymox:         { fg: '#f59e0b', bg: 'rgba(245,158,11,.12)',  bd: 'rgba(245,158,11,.3)'  }, // amber
+};
 function manufacturerChip(m) {
   const s = String(m || '').trim();
   if (!s) return `<span style="font-size:11px;color:var(--text3);">Unknown</span>`;
-  return `<span style="font-size:11px;font-weight:600;color:var(--text2);background:var(--input);border:1px solid var(--border);padding:2px 8px;border-radius:6px;white-space:nowrap;">${s}</span>`;
+  let c = MFR_COLORS[s.toLowerCase()];
+  if (!c) {
+    // Deterministic hue for any manufacturer not in the map.
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+    c = { fg: `hsl(${h},55%,42%)`, bg: `hsla(${h},55%,42%,.12)`, bd: `hsla(${h},55%,42%,.3)` };
+  }
+  return `<span style="font-size:11px;font-weight:600;color:${c.fg};background:${c.bg};border:1px solid ${c.bd};padding:2px 8px;border-radius:6px;white-space:nowrap;">${s}</span>`;
 }
 
 // Populate the Manufacturer filter from the data (distinct values + Unknown).

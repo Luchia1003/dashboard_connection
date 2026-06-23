@@ -334,7 +334,9 @@ function updateDownloadHints() {
     if ((S.inventoryView || 'forecast') === 'forecast') {
       const ch = (document.getElementById('forecastChannel') || {}).value || 'total';
       const st = (document.getElementById('forecastStatus')  || {}).value || '';
-      invH.innerHTML = HINT_PREFIX + hintParts(['Forecast', FCST_CHANNEL_LABEL[ch] || ch, FCST_STATUS_LABEL[st] || st]);
+      const mf = (document.getElementById('forecastManufacturer') || {}).value || '';
+      const mfLabel = mf === '__unknown__' ? 'Unknown' : mf || 'All manufacturers';
+      invH.innerHTML = HINT_PREFIX + hintParts(['Forecast', FCST_CHANNEL_LABEL[ch] || ch, FCST_STATUS_LABEL[st] || st, mfLabel]);
     } else {
       const wh  = (document.getElementById('agingChannel')  || {}).value || '';
       const pri = (document.getElementById('agingPriority') || {}).value || '';
