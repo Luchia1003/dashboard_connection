@@ -34,12 +34,13 @@ function findFeedId(o) {
   return null;
 }
 
-// Build the Set_Manual_Prices feed CSV. price = '' clears the manual price.
+// Build the Set_Manual_Prices feed CSV. price = null|0 REMOVES the manual price
+// (Informed ignores a blank cell — only a literal 0 clears it).
 function buildCsv(items) {
   const esc = v => { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
   const lines = ['SKU,MARKETPLACE_ID,MANUAL_PRICE'];
   for (const it of items)
-    lines.push([esc(it.sku), esc(it.marketplaceId || US_MARKETPLACE), esc(it.price === null ? '' : it.price)].join(','));
+    lines.push([esc(it.sku), esc(it.marketplaceId || US_MARKETPLACE), esc(it.price == null ? 0 : it.price)].join(','));
   return lines.join('\n') + '\n';
 }
 
