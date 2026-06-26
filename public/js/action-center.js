@@ -457,50 +457,98 @@ function acSkuTr(i) {
   </tr>`;
 }
 
-// Reprice control — Amazon PRICING SKU rows only. Suggested manual price is a
-// simple back-out to profit ≥ $2/unit using ORDER figures (fees already netted):
+// Reprice control — Amazon PRICING SKU rows only. The button opens a dropdown
+// listing every Informed US variant with its current price; suggested manual
+// price is a simple back-out to profit ≥ $2/unit from ORDER figures (fees in):
 //   suggested = current_unit_price + ($2 − order_profit_per_unit)
 function acRepriceCell(i) {
   const isAmazon = String(i.platform || '').toLowerCase() === 'amazon';
   const qty = i.orderQty || 0;
   if (i.skuKind === 'coupon' || !isAmazon || i.cause !== 'PRICING' || !qty) return `<td class="num">${acDash}</td>`;
-
-  const pricePu  = i.orderSales / qty;          // current avg selling price / unit
-  const profitPu = i.orderProfit / qty;         // order profit / unit (fees already in)
-  const suggested = Math.max(0.01, pricePu + (2 - profitPu)).toFixed(2);
-  const id = 'rp_' + String(i.sku).replace(/[^A-Za-z0-9]/g, '_');
-  const skuAttr = encodeURIComponent(i.sku);
-  return `<td class="num"><div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;">
-      <span style="color:var(--text3);font-size:11px;">$</span>
-      <input id="${id}" type="number" step="0.01" value="${suggested}"
-        style="width:64px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;font-size:12px;text-align:right;background:var(--bg);color:var(--text);"/>
-      <button onclick="acReprice('${skuAttr}','${id}',this)"
-        style="padding:3px 9px;border:none;border-radius:5px;font-size:11px;font-weight:700;background:#2563eb;color:#fff;cursor:pointer;">Set</button>
-    </div><div class="ac-rp-msg" style="font-size:10px;text-align:right;margin-top:2px;min-height:12px;"></div></td>`;
+  const suggested = Math.max(0.01, (i.orderSales / qty) + (2 - i.orderProfit / qty)).toFixed(2);
+  return `<td class="num"><button onclick="acRepriceOpen('${encodeURIComponent(i.sku)}',${suggested},this)"
+      style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:#2563eb;color:#fff;cursor:pointer;white-space:nowrap;">$${suggested} ▾</button></td>`;
 }
 
-// POST the manual price to Informed (backend expands clean SKU → all US variants).
-window.acReprice = async function (skuEnc, inputId, btn) {
+const acMoney = v => v == null ? '—' : '$' + Number(v).toFixed(2);
+let _acPop;
+function acPopEl() {
+  if (!_acPop) {
+    _acPop = document.createElement('div');
+    _acPop.style.cssText = 'position:fixed;z-index:9999;display:none;background:var(--card,#fff);color:var(--text,#111);border:1px solid var(--border,#ddd);border-radius:10px;box-shadow:0 10px 34px rgba(0,0,0,.2);padding:10px;min-width:330px;font-size:12px;';
+    document.body.appendChild(_acPop);
+    document.addEventListener('mousedown', e => { if (_acPop.style.display !== 'none' && !_acPop.contains(e.target) && !e.target.dataset.acOpen) _acPop.style.display = 'none'; });
+    window.addEventListener('keydown', e => { if (e.key === 'Escape') _acPop.style.display = 'none'; });
+  }
+  return _acPop;
+}
+function acPopPlace(pop, r) {
+  let left = r.right - pop.offsetWidth; if (left < 8) left = 8;
+  let top = r.bottom + 6; if (top + pop.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - pop.offsetHeight - 6);
+  pop.style.left = left + 'px'; pop.style.top = top + 'px';
+}
+
+// Open the dropdown: fetch this clean SKU's US variants (+ current price) and render.
+window.acRepriceOpen = async function (skuEnc, suggested, btn) {
+  btn.dataset.acOpen = '1';
   const sku = decodeURIComponent(skuEnc);
-  const input = document.getElementById(inputId);
-  const price = parseFloat(input && input.value);
-  const msg = btn.parentElement.parentElement.querySelector('.ac-rp-msg');
-  if (!(price > 0)) { msg.textContent = 'enter a price'; msg.style.color = '#ef4444'; return; }
-  if (!confirm(`Set Amazon (US) manual price for ${sku} (all variants) to $${price.toFixed(2)}?\nManual price pauses repricing on those listings until removed.`)) return;
-  btn.disabled = true; msg.textContent = 'submitting…'; msg.style.color = 'var(--text3)';
+  const pop = acPopEl(); const r = btn.getBoundingClientRect();
+  pop.style.display = 'block'; pop.innerHTML = '<div style="color:var(--text3);padding:8px;">Loading variants…</div>';
+  acPopPlace(pop, r);
   try {
-    const r = await fetch('/api/informed-set-price', {
+    const res = await fetch('/api/informed-set-price?sku=' + encodeURIComponent(sku), { credentials: 'include' });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
+    pop.innerHTML = acPopHtml(sku, suggested, j.variants || []);
+  } catch (e) { pop.innerHTML = `<div style="color:#ef4444;padding:8px;">${e.message}</div>`; }
+  acPopPlace(pop, r);
+};
+
+function acPopHtml(sku, suggested, vs) {
+  const cid = 'all_' + String(sku).replace(/[^A-Za-z0-9]/g, '_');
+  const inp = (id, v) => `<span style="color:var(--text3);">$</span><input id="${id}" type="number" step="0.01" value="${v}" style="width:62px;padding:3px;border:1px solid var(--border);border-radius:5px;text-align:right;background:var(--bg);color:var(--text);"/>`;
+  const rows = vs.map((v, idx) => {
+    const id = 'v_' + idx;
+    const badge = v.t === 'FBA' ? '<b style="color:#7c3aed;">FBA</b>' : '<b style="color:#0891b2;">FBM</b>';
+    const live = /live/i.test(v.st) ? '' : ` · ${v.st}`;
+    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 2px;border-top:1px solid var(--border);">
+        <div style="flex:1;min-width:0;"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v.s}</div>
+          <div style="color:var(--text3);font-size:10px;">${badge} · now <b style="color:var(--text);">${acMoney(v.p)}</b>${live}</div></div>
+        ${inp(id, suggested)}
+        <button onclick="acSetVariant('${encodeURIComponent(v.s)}','${id}',this,false)" style="padding:3px 8px;border:none;border-radius:5px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer;">Set</button>
+        <span class="vmsg" style="font-size:11px;min-width:16px;"></span>
+      </div>`;
+  }).join('');
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px 8px;">
+      <b style="font-size:13px;">${sku}</b>
+      <div style="display:flex;align-items:center;gap:5px;">${inp(cid, suggested)}
+        <button onclick="acSetVariant('${encodeURIComponent(sku)}','${cid}',this,true)" style="padding:3px 9px;border:none;border-radius:5px;background:#16a34a;color:#fff;font-weight:700;cursor:pointer;">Set all</button>
+        <span class="vmsg" style="font-size:11px;min-width:16px;"></span></div>
+    </div>
+    ${vs.length ? rows : '<div style="color:var(--text3);padding:6px;">No US variants in snapshot.</div>'}
+    <div style="color:var(--text3);font-size:10px;padding:7px 2px 0;">"now" = price at last snapshot. Manual price pauses repricing until removed.</div>`;
+}
+
+// Submit a manual price. expand=false → only this exact listing; expand=true →
+// backend expands the clean SKU to all its US variants ("Set all").
+window.acSetVariant = async function (skuEnc, inputId, btn, expand) {
+  const sku = decodeURIComponent(skuEnc);
+  const price = parseFloat((document.getElementById(inputId) || {}).value);
+  const msg = btn.parentElement.querySelector('.vmsg');
+  if (!(price > 0)) { msg.textContent = '✗'; msg.style.color = '#ef4444'; return; }
+  if (!confirm(`Set Amazon US manual price for ${sku}${expand ? ' (all variants)' : ''} to $${price.toFixed(2)}?`)) return;
+  btn.disabled = true; msg.textContent = '…'; msg.style.color = 'var(--text3)';
+  try {
+    const res = await fetch('/api/informed-set-price', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ sku, price }),
+      body: JSON.stringify({ sku, price, expand }),
     });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
-    const ok = j.successCount != null ? j.successCount : '?';
-    msg.innerHTML = `✓ set ${ok}${j.errorCount ? ` · ${j.errorCount} err` : ''}`;
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
+    msg.textContent = '✓' + (j.successCount != null ? ' ' + j.successCount : '');
     msg.style.color = j.errorCount ? '#f59e0b' : '#16a34a';
-  } catch (e) {
-    msg.textContent = '✗ ' + e.message; msg.style.color = '#ef4444';
-  } finally { btn.disabled = false; }
+  } catch (e) { msg.textContent = '✗'; msg.title = e.message; msg.style.color = '#ef4444'; }
+  finally { btn.disabled = false; }
 };
 
 // Compact clickable cause chips (badge + count) for the single-row header.

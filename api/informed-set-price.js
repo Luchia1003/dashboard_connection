@@ -4,10 +4,11 @@ const requireAuth = require('../lib/auth');
 const API_BASE = 'api.informedrepricer.com';
 const US_MARKETPLACE = '18508';
 
-// clean-base-SKU → [actual Informed US listing SKUs] (FBM + FBA variants).
-// Lets a SKU-level row (clean SKU) reprice every matching listing at once.
-let VARIANT_MAP = {};
-try { VARIANT_MAP = require('./informed-variants.json'); } catch { /* optional */ }
+// Snapshot: clean-base-SKU → [{ s:variantSku, t:'FBA'|'FBM', st:status,
+// p:currentPrice, mn:min, mx:max }] for US (18508) listings. Powers both the
+// dropdown (GET, show current price per variant) and POST expansion (reprice all).
+let PRICES = {};
+try { PRICES = require('./informed-prices.json'); } catch { /* optional snapshot */ }
 
 // ── Informed API helpers ──────────────────────────────────────────────────────
 function apiRequest({ method, path, headers = {}, body = null }) {
@@ -68,13 +69,21 @@ async function pollFeed(id, { tries = 10, gap = 1500 } = {}) {
 // ── handler ───────────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const user = requireAuth(req, res);
   if (!user) return;
+
+  // GET ?sku=CLEAN_SKU → the SKU's US variants with current (snapshot) price,
+  // for the reprice dropdown. No Informed call — reads the bundled snapshot.
+  if (req.method === 'GET') {
+    const sku = String((req.query && req.query.sku) || '').toUpperCase().trim();
+    if (!sku) return res.status(400).json({ error: 'sku query param required' });
+    return res.status(200).json({ sku, variants: PRICES[sku] || [] });
+  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!process.env.INFORMED_API_KEY) return res.status(500).json({ error: 'INFORMED_API_KEY not configured' });
 
   // Accept { items:[{sku,marketplaceId?,price}] } or a single { sku, price, marketplaceId? }.
@@ -95,7 +104,7 @@ module.exports = async function handler(req, res) {
   const expand = body.expand !== false;
   const targets = [];
   for (const it of items) {
-    const variants = expand ? VARIANT_MAP[String(it.sku).toUpperCase().trim()] : null;
+    const variants = expand ? (PRICES[String(it.sku).toUpperCase().trim()] || []).map(v => v.s) : null;
     if (variants && variants.length) variants.forEach(v => targets.push({ sku: v, marketplaceId: it.marketplaceId, price: it.price }));
     else targets.push(it);
   }
