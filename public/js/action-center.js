@@ -390,6 +390,7 @@ function acSkuHead() {
     <th>Return Rate</th>
     <th>Restock</th>
     <th>Profit</th>
+    <th>Reprice</th>
   </tr>`;
 }
 
@@ -452,8 +453,55 @@ function acSkuTr(i) {
     ${rrCell}
     ${restockCell}
     ${profitCell}
+    ${acRepriceCell(i)}
   </tr>`;
 }
+
+// Reprice control — Amazon PRICING SKU rows only. Suggested manual price is a
+// simple back-out to profit ≥ $2/unit using ORDER figures (fees already netted):
+//   suggested = current_unit_price + ($2 − order_profit_per_unit)
+function acRepriceCell(i) {
+  const isAmazon = String(i.platform || '').toLowerCase() === 'amazon';
+  const qty = i.orderQty || 0;
+  if (i.skuKind === 'coupon' || !isAmazon || i.cause !== 'PRICING' || !qty) return `<td class="num">${acDash}</td>`;
+
+  const pricePu  = i.orderSales / qty;          // current avg selling price / unit
+  const profitPu = i.orderProfit / qty;         // order profit / unit (fees already in)
+  const suggested = Math.max(0.01, pricePu + (2 - profitPu)).toFixed(2);
+  const id = 'rp_' + String(i.sku).replace(/[^A-Za-z0-9]/g, '_');
+  const skuAttr = encodeURIComponent(i.sku);
+  return `<td class="num"><div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;">
+      <span style="color:var(--text3);font-size:11px;">$</span>
+      <input id="${id}" type="number" step="0.01" value="${suggested}"
+        style="width:64px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;font-size:12px;text-align:right;background:var(--bg);color:var(--text);"/>
+      <button onclick="acReprice('${skuAttr}','${id}',this)"
+        style="padding:3px 9px;border:none;border-radius:5px;font-size:11px;font-weight:700;background:#2563eb;color:#fff;cursor:pointer;">Set</button>
+    </div><div class="ac-rp-msg" style="font-size:10px;text-align:right;margin-top:2px;min-height:12px;"></div></td>`;
+}
+
+// POST the manual price to Informed (backend expands clean SKU → all US variants).
+window.acReprice = async function (skuEnc, inputId, btn) {
+  const sku = decodeURIComponent(skuEnc);
+  const input = document.getElementById(inputId);
+  const price = parseFloat(input && input.value);
+  const msg = btn.parentElement.parentElement.querySelector('.ac-rp-msg');
+  if (!(price > 0)) { msg.textContent = 'enter a price'; msg.style.color = '#ef4444'; return; }
+  if (!confirm(`Set Amazon (US) manual price for ${sku} (all variants) to $${price.toFixed(2)}?\nManual price pauses repricing on those listings until removed.`)) return;
+  btn.disabled = true; msg.textContent = 'submitting…'; msg.style.color = 'var(--text3)';
+  try {
+    const r = await fetch('/api/informed-set-price', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ sku, price }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    const ok = j.successCount != null ? j.successCount : '?';
+    msg.innerHTML = `✓ set ${ok}${j.errorCount ? ` · ${j.errorCount} err` : ''}`;
+    msg.style.color = j.errorCount ? '#f59e0b' : '#16a34a';
+  } catch (e) {
+    msg.textContent = '✗ ' + e.message; msg.style.color = '#ef4444';
+  } finally { btn.disabled = false; }
+};
 
 // Compact clickable cause chips (badge + count) for the single-row header.
 // The cause meaning lives in the title tooltip to keep the row tight.
@@ -550,7 +598,7 @@ function renderActionCenterPage() {
 
   if (!list.length) {
     const msg = S.acCause ? `No ${S.acCause} ${level === 'order' ? 'orders' : 'SKUs'}` : `No loss-making ${level === 'order' ? 'orders' : 'SKUs'} 🎉`;
-    bodyEl.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    bodyEl.innerHTML = `<tr><td colspan="${level === 'order' ? 11 : 12}" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
   bodyEl.innerHTML = list.map(level === 'order' ? acOrderTr : acSkuTr).join('');
