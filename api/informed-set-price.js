@@ -1,14 +1,49 @@
 const https = require('https');
+const crypto = require('crypto');
+const snowflake = require('snowflake-sdk');
 const requireAuth = require('../lib/auth');
 
 const API_BASE = 'api.informedrepricer.com';
 const US_MARKETPLACE = '18508';
+const LISTINGS_TABLE = 'SKU_PROFIT_PROJECT.DASHBOARD_DB.INFORMED_LISTINGS';
+// Same suffix-strip the dashboard uses, applied in SQL to match a clean SKU
+// against the raw Informed listing SKUs.
+const CLEAN_SQL = `REGEXP_REPLACE(UPPER(TRIM(SKU)),'((-FORFBA-USEUPC|-FORFBA-USE-UPC|-FORFBA-AMAZON-BARCODE|-FORFBA--|-FORFBA-|-FORFBA|-AMZFBA))+$','')`;
 
-// Snapshot: clean-base-SKU → [{ s:variantSku, t:'FBA'|'FBM', st:status,
-// p:currentPrice, mn:min, mx:max }] for US (18508) listings. Powers both the
-// dropdown (GET, show current price per variant) and POST expansion (reprice all).
-let PRICES = {};
-try { PRICES = require('./informed-prices.json'); } catch { /* optional snapshot */ }
+// ── Snowflake: fetch a clean SKU's US variants + current (daily-refreshed) price.
+// Source table is refreshed by the Informed Listings Sync GitHub Action.
+function getPrivateKey() {
+  const key = process.env.SNOWFLAKE_PRIVATE_KEY.replace(/\\n/g, '\n');
+  return crypto.createPrivateKey({ key, format: 'pem' }).export({ type: 'pkcs8', format: 'pem' });
+}
+function fetchVariants(cleanSku) {
+  return new Promise((resolve, reject) => {
+    const conn = snowflake.createConnection({
+      account: process.env.SNOWFLAKE_ACCOUNT, username: process.env.SNOWFLAKE_USERNAME,
+      authenticator: 'SNOWFLAKE_JWT', privateKey: getPrivateKey(),
+      database: process.env.SNOWFLAKE_DATABASE, schema: process.env.SNOWFLAKE_SCHEMA,
+      warehouse: process.env.SNOWFLAKE_WAREHOUSE, role: process.env.SNOWFLAKE_ROLE,
+    });
+    const num = v => { const n = parseFloat(v); return isFinite(n) ? n : null; };
+    conn.connect(err => {
+      if (err) return reject(err);
+      conn.execute({
+        sqlText: `SELECT SKU,
+            CASE WHEN UPPER(LISTING_TYPE) LIKE '%FBA%' THEN 'FBA' ELSE 'FBM' END AS T,
+            STATUS AS ST, CURRENT_PRICE AS P, MIN_PRICE AS MN, MAX_PRICE AS MX
+          FROM ${LISTINGS_TABLE}
+          WHERE MARKETPLACE_ID = '${US_MARKETPLACE}' AND ${CLEAN_SQL} = ?
+          ORDER BY (CASE WHEN UPPER(LISTING_TYPE) LIKE '%FBA%' THEN 1 ELSE 0 END), SKU`,
+        binds: [String(cleanSku).toUpperCase().trim()],
+        complete: (e, stmt, rows) => {
+          conn.destroy(() => {});
+          if (e) return reject(e);
+          resolve((rows || []).map(r => ({ s: r.SKU, t: r.T, st: r.ST || '', p: num(r.P), mn: num(r.MN), mx: num(r.MX) })));
+        },
+      });
+    });
+  });
+}
 
 // ── Informed API helpers ──────────────────────────────────────────────────────
 function apiRequest({ method, path, headers = {}, body = null }) {
@@ -26,7 +61,6 @@ function apiRequest({ method, path, headers = {}, body = null }) {
 const asJson = s => { try { return JSON.parse(s); } catch { return null; } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Deep-scan JSON for the feed submission id.
 function findFeedId(o) {
   if (!o || typeof o !== 'object') return null;
   for (const [k, v] of Object.entries(o))
@@ -46,8 +80,7 @@ function buildCsv(items) {
 }
 
 async function submitFeed(csv) {
-  const r = await apiRequest({ method: 'POST', path: '/v1/feed',
-    headers: { 'Content-Type': 'text/csv' }, body: csv });
+  const r = await apiRequest({ method: 'POST', path: '/v1/feed', headers: { 'Content-Type': 'text/csv' }, body: csv });
   if (r.status >= 300) throw new Error(`submit HTTP ${r.status}: ${r.body.slice(0, 300)}`);
   const id = findFeedId(asJson(r.body));
   if (!id) throw new Error(`no FeedSubmissionID in response: ${r.body.slice(0, 300)}`);
@@ -59,8 +92,7 @@ async function pollFeed(id, { tries = 10, gap = 1500 } = {}) {
     const r = await apiRequest({ method: 'GET', path: `/v1/feed/submissions/${encodeURIComponent(id)}` });
     const j = asJson(r.body);
     const rec = Array.isArray(j) ? j[0] : j;
-    if (rec && (rec.ProcessedPercent === 100 || /complete/i.test(rec.Status || '')))
-      return rec;
+    if (rec && (rec.ProcessedPercent === 100 || /complete/i.test(rec.Status || ''))) return rec;
     await sleep(gap);
   }
   return null;
@@ -76,12 +108,14 @@ module.exports = async function handler(req, res) {
   const user = requireAuth(req, res);
   if (!user) return;
 
-  // GET ?sku=CLEAN_SKU → the SKU's US variants with current (snapshot) price,
-  // for the reprice dropdown. No Informed call — reads the bundled snapshot.
+  // GET ?sku=CLEAN_SKU → the SKU's US variants with current price (from the
+  // daily-refreshed INFORMED_LISTINGS table), for the reprice dropdown.
   if (req.method === 'GET') {
     const sku = String((req.query && req.query.sku) || '').toUpperCase().trim();
     if (!sku) return res.status(400).json({ error: 'sku query param required' });
-    return res.status(200).json({ sku, variants: PRICES[sku] || [] });
+    try {
+      return res.status(200).json({ sku, variants: await fetchVariants(sku) });
+    } catch (err) { console.error('[informed-set-price GET]', err); return res.status(502).json({ error: err.message }); }
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!process.env.INFORMED_API_KEY) return res.status(500).json({ error: 'INFORMED_API_KEY not configured' });
@@ -99,19 +133,18 @@ module.exports = async function handler(req, res) {
     if (it.price !== null && !(Number(it.price) > 0)) return res.status(400).json({ error: `invalid price for ${it.sku}` });
   }
 
-  // Expand each clean base SKU to all its US Informed variants (FBM + FBA).
-  // Unless the caller opts out with { expand:false }.
-  const expand = body.expand !== false;
-  const targets = [];
-  for (const it of items) {
-    const variants = expand ? (PRICES[String(it.sku).toUpperCase().trim()] || []).map(v => v.s) : null;
-    if (variants && variants.length) variants.forEach(v => targets.push({ sku: v, marketplaceId: it.marketplaceId, price: it.price }));
-    else targets.push(it);
-  }
-
   try {
-    const csv = buildCsv(targets);
-    const feedId = await submitFeed(csv);
+    // Expand each clean base SKU to all its US variants (FBM + FBA) unless
+    // { expand:false } (single-listing set). Variant SKUs come from Snowflake.
+    const expand = body.expand !== false;
+    const targets = [];
+    for (const it of items) {
+      const variants = expand ? (await fetchVariants(it.sku)).map(v => v.s) : null;
+      if (variants && variants.length) variants.forEach(v => targets.push({ sku: v, marketplaceId: it.marketplaceId, price: it.price }));
+      else targets.push(it);
+    }
+
+    const feedId = await submitFeed(buildCsv(targets));
     const rec = await pollFeed(feedId);
     return res.status(200).json({
       feedSubmissionId: feedId,
