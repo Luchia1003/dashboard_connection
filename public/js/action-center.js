@@ -593,6 +593,7 @@ function renderActionCenterPage() {
   if (!ready) { loadActionCenterData(); return; }
 
   const insights = acBuildInsights();
+  S._acInsights = insights;
   const orderInsights = insights.filter(i => i.level === 'order');
   const skuInsights   = insights.filter(i => i.level === 'sku');
 
@@ -601,14 +602,6 @@ function renderActionCenterPage() {
   const counts   = acCauseCounts(fullList);
   const causeOrder = level === 'order' ? ['PRICING', 'DROPSHIP', 'COUPON'] : ['PRICING', 'RETURN', 'COUPON'];
 
-  // Apply the active cause filter.
-  let list = S.acCause ? fullList.filter(i => i.cause === S.acCause) : fullList;
-  list = [...list].sort((a, b) => {
-    const pa = AC.CAUSE_PRIORITY[a.cause] || 0, pb = AC.CAUSE_PRIORITY[b.cause] || 0;
-    if (pa !== pb) return pb - pa;
-    return a.profit - b.profit; // most negative first
-  });
-
   acSyncLevelToggle(orderInsights.length, skuInsights.length, level);
 
   const subtitle = level === 'order'
@@ -616,6 +609,9 @@ function renderActionCenterPage() {
     : `Follows Product Detail Time Range · ${typeof trDisplay === 'function' ? trDisplay() : 'All time'} (coupon: last 3 days)`;
 
   const dlIcon = '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>';
+  const ctrl = 'padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg);color:var(--text);';
+  const sortOpts = [['loss', 'Biggest loss'], ['smallest', 'Smallest loss'], ['sku', 'SKU A–Z'], ['sales', 'Product sales'], ['qty', 'Quantity']]
+    .map(([v, l]) => `<option value="${v}"${(S.acSort || 'loss') === v ? ' selected' : ''}>${l}</option>`).join('');
 
   // Header card (stays fixed above the scrolling table): title · subtitle ·
   // cause chips · downloads.
@@ -626,7 +622,7 @@ function renderActionCenterPage() {
           <span style="font-size:22px;">⚠️</span>
           <div>
             <div style="font-size:18px;font-weight:800;color:var(--text);">Profit &lt; 0</div>
-            <div style="font-size:12px;color:var(--text3);">${level === 'order' ? 'Order Level' : 'SKU Level'} · ${subtitle} · <b style="color:#ef4444;">${list.length}${S.acCause ? ` / ${fullList.length}` : ''}</b></div>
+            <div style="font-size:12px;color:var(--text3);">${level === 'order' ? 'Order Level' : 'SKU Level'} · ${subtitle} · <b id="acResultCount" style="color:#ef4444;"></b></div>
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
@@ -635,6 +631,13 @@ function renderActionCenterPage() {
             : '<span style="font-size:13px;color:var(--text3);">No losses detected 🎉</span>'}
         </div>
         <div style="flex:1;"></div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="position:relative;display:flex;align-items:center;">
+            <input id="acSearch" value="${String(S.acSearch || '').replace(/"/g, '&quot;')}" oninput="acSearchChanged()" placeholder="Search SKU…" style="${ctrl}width:150px;padding-right:22px;"/>
+            <button id="acSearchClear" onclick="acClearSearch()" title="Clear" style="position:absolute;right:4px;border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;display:${S.acSearch ? '' : 'none'};">✕</button>
+          </div>
+          <select id="acSort" onchange="acSortChanged()" style="${ctrl}">${sortOpts}</select>
+        </div>
         <div class="dl-wrap" style="flex-direction:row;gap:8px;padding:6px 8px;">
           <button class="dl-btn" onclick="acDownload('order')" title="Download all order-level insights (ignores the cause filter)">${dlIcon} Order CSV</button>
           <button class="dl-btn" onclick="acDownload('sku')" title="Download all SKU-level insights (ignores the cause filter)">${dlIcon} SKU CSV</button>
@@ -643,12 +646,58 @@ function renderActionCenterPage() {
     </div>`;
 
   headEl.innerHTML = level === 'order' ? acOrderHead() : acSkuHead();
+  acRenderBody();
+}
+window.renderActionCenterPage = renderActionCenterPage;
+
+// Filter (cause + SKU search) + sort + render the table body only. Called on
+// search/sort change so the search box keeps focus (the header isn't rebuilt).
+function acRenderBody() {
+  const bodyEl = document.getElementById('actionBody');
+  if (!bodyEl) return;
+  const level = S.acLevel || 'order';
+  const insights = S._acInsights || acBuildInsights();
+  const fullList = insights.filter(i => i.level === level);
+
+  let list = S.acCause ? fullList.filter(i => i.cause === S.acCause) : fullList;
+  const q = String(S.acSearch || '').trim().toLowerCase();
+  if (q) list = list.filter(i => String(i.sku || '').toLowerCase().includes(q) || String(i.orderId || '').toLowerCase().includes(q));
+
+  const salesOf = i => level === 'order' ? (i.productSales || 0) : (i.orderSales || 0);
+  const qtyOf   = i => level === 'order' ? (i.qty || 0) : (i.orderQty || 0);
+  const cmp = {
+    loss:     (a, b) => { const pa = AC.CAUSE_PRIORITY[a.cause] || 0, pb = AC.CAUSE_PRIORITY[b.cause] || 0; return pa !== pb ? pb - pa : a.profit - b.profit; },
+    smallest: (a, b) => b.profit - a.profit,
+    sku:      (a, b) => String(a.sku || '').localeCompare(String(b.sku || '')),
+    sales:    (a, b) => salesOf(b) - salesOf(a),
+    qty:      (a, b) => qtyOf(b) - qtyOf(a),
+  }[S.acSort || 'loss'] || ((a, b) => a.profit - b.profit);
+  list = [...list].sort(cmp);
+
+  const cnt = document.getElementById('acResultCount');
+  if (cnt) cnt.textContent = `${list.length}${(S.acCause || q) ? ` / ${fullList.length}` : ''}`;
 
   if (!list.length) {
-    const msg = S.acCause ? `No ${S.acCause} ${level === 'order' ? 'orders' : 'SKUs'}` : `No loss-making ${level === 'order' ? 'orders' : 'SKUs'} 🎉`;
+    const noun = level === 'order' ? 'orders' : 'SKUs';
+    const msg = q ? `No ${noun} matching "${S.acSearch}"` : (S.acCause ? `No ${S.acCause} ${noun}` : `No loss-making ${noun} 🎉`);
     bodyEl.innerHTML = `<tr><td colspan="${level === 'order' ? 11 : 12}" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
   bodyEl.innerHTML = list.map(level === 'order' ? acOrderTr : acSkuTr).join('');
 }
-window.renderActionCenterPage = renderActionCenterPage;
+
+window.acSearchChanged = function () {
+  S.acSearch = (document.getElementById('acSearch') || {}).value || '';
+  const b = document.getElementById('acSearchClear'); if (b) b.style.display = S.acSearch ? '' : 'none';
+  acRenderBody();
+};
+window.acClearSearch = function () {
+  S.acSearch = '';
+  const i = document.getElementById('acSearch'); if (i) i.value = '';
+  const b = document.getElementById('acSearchClear'); if (b) b.style.display = 'none';
+  acRenderBody();
+};
+window.acSortChanged = function () {
+  S.acSort = (document.getElementById('acSort') || {}).value || 'loss';
+  acRenderBody();
+};
