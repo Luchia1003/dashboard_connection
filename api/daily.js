@@ -1,6 +1,6 @@
 const snowflake = require('snowflake-sdk');
 const crypto = require('crypto');
-const requireAuth = require('./middleware/auth');
+const requireAuth = require('../lib/auth');
 
 function getPrivateKey() {
   const key = process.env.SNOWFLAKE_PRIVATE_KEY.replace(/\\n/g, '\n');

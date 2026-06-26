@@ -1,5 +1,5 @@
 const https = require('https');
-const requireAuth = require('./middleware/auth');
+const requireAuth = require('../lib/auth');
 
 const API_BASE = 'api.informedrepricer.com';
 const US_MARKETPLACE = '18508';
