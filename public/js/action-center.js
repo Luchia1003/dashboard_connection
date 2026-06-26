@@ -457,16 +457,17 @@ function acSkuTr(i) {
   </tr>`;
 }
 
-// Reprice control — Amazon PRICING SKU rows only. The button opens a dropdown
-// listing every Informed US variant with its current price; suggested manual
-// price is a simple back-out to profit ≥ $2/unit from ORDER figures (fees in):
+// Reprice control — Amazon & Shopify PRICING SKU rows. The button opens a
+// dropdown of the SKU's listing(s) with current price; suggested price is a
+// simple back-out to profit ≥ $2/unit from ORDER figures (fees already in):
 //   suggested = current_unit_price + ($2 − order_profit_per_unit)
+// Amazon → Informed manual price (all US variants); Shopify → the variant price.
 function acRepriceCell(i) {
-  const isAmazon = String(i.platform || '').toLowerCase() === 'amazon';
+  const plat = String(i.platform || '').toLowerCase();
   const qty = i.orderQty || 0;
-  if (i.skuKind === 'coupon' || !isAmazon || i.cause !== 'PRICING' || !qty) return `<td class="num">${acDash}</td>`;
+  if (i.skuKind === 'coupon' || !(plat === 'amazon' || plat === 'shopify') || i.cause !== 'PRICING' || !qty) return `<td class="num">${acDash}</td>`;
   const suggested = Math.max(0.01, (i.orderSales / qty) + (2 - i.orderProfit / qty)).toFixed(2);
-  return `<td class="num"><button onclick="acRepriceOpen('${encodeURIComponent(i.sku)}',${suggested},this)"
+  return `<td class="num"><button onclick="acRepriceOpen('${encodeURIComponent(i.sku)}',${suggested},'${plat}',this)"
       style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:#2563eb;color:#fff;cursor:pointer;white-space:nowrap;">$${suggested} ▾</button></td>`;
 }
 
@@ -488,60 +489,67 @@ function acPopPlace(pop, r) {
   pop.style.left = left + 'px'; pop.style.top = top + 'px';
 }
 
-// Open the dropdown: fetch this clean SKU's US variants (+ current price) and render.
-window.acRepriceOpen = async function (skuEnc, suggested, btn) {
+// Open the dropdown: fetch this SKU's listing variants (+ current price) and render.
+window.acRepriceOpen = async function (skuEnc, suggested, platform, btn) {
   btn.dataset.acOpen = '1';
   const sku = decodeURIComponent(skuEnc);
   const pop = acPopEl(); const r = btn.getBoundingClientRect();
-  pop.style.display = 'block'; pop.innerHTML = '<div style="color:var(--text3);padding:8px;">Loading variants…</div>';
+  pop.style.display = 'block'; pop.innerHTML = '<div style="color:var(--text3);padding:8px;">Loading…</div>';
   acPopPlace(pop, r);
   try {
-    const res = await fetch('/api/informed-set-price?sku=' + encodeURIComponent(sku), { credentials: 'include' });
+    const res = await fetch(`/api/informed-set-price?platform=${encodeURIComponent(platform)}&sku=${encodeURIComponent(sku)}`, { credentials: 'include' });
     const j = await res.json();
     if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
-    pop.innerHTML = acPopHtml(sku, suggested, j.variants || []);
+    pop.innerHTML = acPopHtml(sku, suggested, j.variants || [], platform);
   } catch (e) { pop.innerHTML = `<div style="color:#ef4444;padding:8px;">${e.message}</div>`; }
   acPopPlace(pop, r);
 };
 
-function acPopHtml(sku, suggested, vs) {
+function acPopHtml(sku, suggested, vs, platform) {
+  const shopify = platform === 'shopify';
   const cid = 'all_' + String(sku).replace(/[^A-Za-z0-9]/g, '_');
   const inp = (id, v) => `<span style="color:var(--text3);">$</span><input id="${id}" type="number" step="0.01" value="${v}" style="width:62px;padding:3px;border:1px solid var(--border);border-radius:5px;text-align:right;background:var(--bg);color:var(--text);"/>`;
   const rows = vs.map((v, idx) => {
     const id = 'v_' + idx;
-    const badge = v.t === 'FBA' ? '<b style="color:#7c3aed;">FBA</b>' : '<b style="color:#0891b2;">FBM</b>';
-    const live = /live/i.test(v.st) ? '' : ` · ${v.st}`;
+    const badge = shopify ? '<b style="color:#10b981;">Shopify</b>' : (v.t === 'FBA' ? '<b style="color:#7c3aed;">FBA</b>' : '<b style="color:#0891b2;">FBM</b>');
+    const live = /live/i.test(v.st) || !v.st ? '' : ` · ${v.st}`;
     return `<div style="display:flex;align-items:center;gap:6px;padding:6px 2px;border-top:1px solid var(--border);">
         <div style="flex:1;min-width:0;"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v.s}</div>
           <div style="color:var(--text3);font-size:10px;">${badge} · now <b style="color:var(--text);">${acMoney(v.p)}</b>${live}</div></div>
         ${inp(id, suggested)}
-        <button onclick="acSetVariant('${encodeURIComponent(v.s)}','${id}',this,false)" style="padding:3px 8px;border:none;border-radius:5px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer;">Set</button>
+        <button onclick="acSetVariant('${encodeURIComponent(v.s)}','${id}',this,false,'${platform}')" style="padding:3px 8px;border:none;border-radius:5px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer;">Set</button>
         <span class="vmsg" style="font-size:11px;min-width:16px;"></span>
       </div>`;
   }).join('');
+  const setAll = shopify
+    ? '' // Shopify has a single variant — the per-row Set is enough
+    : `<div style="display:flex;align-items:center;gap:5px;">${inp(cid, suggested)}
+        <button onclick="acSetVariant('${encodeURIComponent(sku)}','${cid}',this,true,'${platform}')" style="padding:3px 9px;border:none;border-radius:5px;background:#16a34a;color:#fff;font-weight:700;cursor:pointer;">Set all</button>
+        <span class="vmsg" style="font-size:11px;min-width:16px;"></span></div>`;
+  const note = shopify
+    ? '"now" = current Shopify price. The change applies immediately.'
+    : '"now" = price at last daily snapshot. Manual price pauses repricing until removed.';
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px 8px;">
-      <b style="font-size:13px;">${sku}</b>
-      <div style="display:flex;align-items:center;gap:5px;">${inp(cid, suggested)}
-        <button onclick="acSetVariant('${encodeURIComponent(sku)}','${cid}',this,true)" style="padding:3px 9px;border:none;border-radius:5px;background:#16a34a;color:#fff;font-weight:700;cursor:pointer;">Set all</button>
-        <span class="vmsg" style="font-size:11px;min-width:16px;"></span></div>
+      <b style="font-size:13px;">${sku}</b>${setAll}
     </div>
-    ${vs.length ? rows : '<div style="color:var(--text3);padding:6px;">No US variants in snapshot.</div>'}
-    <div style="color:var(--text3);font-size:10px;padding:7px 2px 0;">"now" = price at last snapshot. Manual price pauses repricing until removed.</div>`;
+    ${vs.length ? rows : `<div style="color:var(--text3);padding:6px;">${shopify ? 'No Shopify variant found for this SKU.' : 'No US variants in snapshot.'}</div>`}
+    <div style="color:var(--text3);font-size:10px;padding:7px 2px 0;">${note}</div>`;
 }
 
-// Submit a manual price. expand=false → only this exact listing; expand=true →
-// backend expands the clean SKU to all its US variants ("Set all").
-window.acSetVariant = async function (skuEnc, inputId, btn, expand) {
+// Submit a price. Amazon: manual price via Informed (expand=true → all US
+// variants). Shopify: update the variant price directly (instant).
+window.acSetVariant = async function (skuEnc, inputId, btn, expand, platform) {
   const sku = decodeURIComponent(skuEnc);
   const price = parseFloat((document.getElementById(inputId) || {}).value);
   const msg = btn.parentElement.querySelector('.vmsg');
   if (!(price > 0)) { msg.textContent = '✗'; msg.style.color = '#ef4444'; return; }
-  if (!confirm(`Set Amazon US manual price for ${sku}${expand ? ' (all variants)' : ''} to $${price.toFixed(2)}?`)) return;
+  const label = platform === 'shopify' ? `Shopify price for ${sku}` : `Amazon US manual price for ${sku}${expand ? ' (all variants)' : ''}`;
+  if (!confirm(`Set ${label} to $${price.toFixed(2)}?`)) return;
   btn.disabled = true; msg.textContent = '…'; msg.style.color = 'var(--text3)';
   try {
     const res = await fetch('/api/informed-set-price', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ sku, price, expand }),
+      body: JSON.stringify({ sku, price, expand, platform }),
     });
     const j = await res.json();
     if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));

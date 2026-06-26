@@ -98,6 +98,35 @@ async function pollFeed(id, { tries = 10, gap = 1500 } = {}) {
   return null;
 }
 
+// ── Shopify Admin API (GraphQL) ───────────────────────────────────────────────
+// Shopify SKU = one variant (no FBA/FBM, no marketplace split). Private-app
+// Basic auth. Price updates are instant (no async feed).
+function shopifyGql(query, variables) {
+  return new Promise((resolve, reject) => {
+    const auth = 'Basic ' + Buffer.from(`${process.env.SHOP_API_KEY}:${process.env.SHOP_API_PASSWORD}`).toString('base64');
+    const ver = process.env.SHOP_API_VERSION || '2024-10';
+    const data = JSON.stringify({ query, variables });
+    const r = https.request({ host: process.env.SHOP_DOMAIN, path: `/admin/api/${ver}/graphql.json`, method: 'POST',
+      headers: { Authorization: auth, 'Content-Type': 'application/json', accept: 'application/json' } },
+      x => { const c = []; x.on('data', d => c.push(d)); x.on('end', () => { try { resolve(JSON.parse(Buffer.concat(c).toString('utf8') || '{}')); } catch (e) { reject(e); } }); });
+    r.on('error', reject); r.write(data); r.end();
+  });
+}
+async function shopifyVariant(sku) {
+  const j = await shopifyGql(`query($q:String!){ productVariants(first:1, query:$q){ edges{ node{ id price sku product{ id title } } } } }`, { q: `sku:${sku}` });
+  return j.data?.productVariants?.edges?.[0]?.node || null;
+}
+async function shopifySetPrice(sku, price) {
+  const v = await shopifyVariant(sku);
+  if (!v) return { ok: false, error: `no Shopify variant for ${sku}` };
+  const j = await shopifyGql(
+    `mutation($productId:ID!,$variants:[ProductVariantsBulkInput!]!){ productVariantsBulkUpdate(productId:$productId,variants:$variants){ productVariants{ id price } userErrors{ field message } } }`,
+    { productId: v.product.id, variants: [{ id: v.id, price: String(price) }] });
+  const errs = j.data?.productVariantsBulkUpdate?.userErrors || [];
+  if (errs.length || j.errors) return { ok: false, error: (errs.map(e => e.message).join('; ') || JSON.stringify(j.errors)) };
+  return { ok: true, price: j.data.productVariantsBulkUpdate.productVariants?.[0]?.price };
+}
+
 // ── handler ───────────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -108,17 +137,23 @@ module.exports = async function handler(req, res) {
   const user = requireAuth(req, res);
   if (!user) return;
 
-  // GET ?sku=CLEAN_SKU → the SKU's US variants with current price (from the
-  // daily-refreshed INFORMED_LISTINGS table), for the reprice dropdown.
+  // GET ?sku=&platform= → the SKU's variants with current price, for the dropdown.
+  // amazon → US Informed variants (daily INFORMED_LISTINGS table). shopify → the
+  // single Shopify variant (live).
   if (req.method === 'GET') {
-    const sku = String((req.query && req.query.sku) || '').toUpperCase().trim();
+    const platform = String((req.query && req.query.platform) || 'amazon').toLowerCase();
+    const sku = String((req.query && req.query.sku) || '').trim();
     if (!sku) return res.status(400).json({ error: 'sku query param required' });
     try {
-      return res.status(200).json({ sku, variants: await fetchVariants(sku) });
-    } catch (err) { console.error('[informed-set-price GET]', err); return res.status(502).json({ error: err.message }); }
+      if (platform === 'shopify') {
+        const v = await shopifyVariant(sku);
+        const variants = v ? [{ s: v.sku, t: 'Shopify', st: '', p: parseFloat(v.price), mn: null, mx: null }] : [];
+        return res.status(200).json({ sku, platform, variants });
+      }
+      return res.status(200).json({ sku, variants: await fetchVariants(sku.toUpperCase()) });
+    } catch (err) { console.error('[set-price GET]', err); return res.status(502).json({ error: err.message }); }
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!process.env.INFORMED_API_KEY) return res.status(500).json({ error: 'INFORMED_API_KEY not configured' });
 
   // Accept { items:[{sku,marketplaceId?,price}] } or a single { sku, price, marketplaceId? }.
   let body = req.body;
@@ -133,9 +168,23 @@ module.exports = async function handler(req, res) {
     if (it.price !== null && !(Number(it.price) > 0)) return res.status(400).json({ error: `invalid price for ${it.sku}` });
   }
 
+  const platform = String(body.platform || 'amazon').toLowerCase();
   try {
-    // Expand each clean base SKU to all its US variants (FBM + FBA) unless
-    // { expand:false } (single-listing set). Variant SKUs come from Snowflake.
+    // Shopify: update each variant directly (no expansion, no feed — instant).
+    if (platform === 'shopify') {
+      const results = [];
+      for (const it of items) results.push(await shopifySetPrice(it.sku, it.price));
+      const ok = results.filter(r => r.ok).length;
+      return res.status(200).json({
+        platform: 'shopify', successCount: ok, errorCount: results.length - ok,
+        errors: results.filter(r => !r.ok).map(r => r.error),
+        submitted: items.map((i, idx) => ({ sku: i.sku, price: i.price, ok: results[idx].ok })),
+      });
+    }
+
+    // Amazon (Informed feed). Expand each clean base SKU to all its US variants
+    // (FBM + FBA) unless { expand:false }. Variant SKUs come from Snowflake.
+    if (!process.env.INFORMED_API_KEY) return res.status(500).json({ error: 'INFORMED_API_KEY not configured' });
     const expand = body.expand !== false;
     const targets = [];
     for (const it of items) {
@@ -143,7 +192,6 @@ module.exports = async function handler(req, res) {
       if (variants && variants.length) variants.forEach(v => targets.push({ sku: v, marketplaceId: it.marketplaceId, price: it.price }));
       else targets.push(it);
     }
-
     const feedId = await submitFeed(buildCsv(targets));
     const rec = await pollFeed(feedId);
     return res.status(200).json({
@@ -154,7 +202,7 @@ module.exports = async function handler(req, res) {
       submitted: targets.map(i => ({ sku: i.sku, marketplaceId: i.marketplaceId || US_MARKETPLACE, price: i.price })),
     });
   } catch (err) {
-    console.error('[informed-set-price]', err);
+    console.error('[set-price]', err);
     return res.status(502).json({ error: err.message });
   }
 };
