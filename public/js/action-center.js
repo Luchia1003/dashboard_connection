@@ -286,7 +286,7 @@ const AC_ORDER_COLS = ['CAUSE', 'ORDER_ID', 'SKU', 'PLATFORM', 'ORDER_DATE', 'QT
 const AC_SKU_COLS = ['CAUSE', 'SKU', 'PLATFORM', 'ORDER_PROFIT', 'NET_PROFIT',
   'ORDER_PRODUCT_SALES', 'NET_PRODUCT_SALES', 'ORDER_MARGIN', 'NET_MARGIN',
   'ORDER_QTY', 'NET_QTY', 'UNIT_COST', 'RETURN_RATE', 'COUPON_FEE',
-  'PRE_COUPON_PROFIT', 'PROFIT'];
+  'PRE_COUPON_PROFIT', 'PROFIT', 'CURRENT_PRICE', 'REPRICED'];
 
 const acRound = v => (v == null ? '' : Math.round(Number(v) * 100) / 100);
 
@@ -314,6 +314,7 @@ function acSkuCsvRow(i) {
       PRE_COUPON_PROFIT: acRound(i.preFreeProfit), PROFIT: acRound(i.profit),
     };
   }
+  const st = i.cause === 'PRICING' && i.orderQty > 0 ? acRepriceState(i) : null;
   return {
     CAUSE: i.cause, SKU: i.sku, PLATFORM: i.platform,
     ORDER_PROFIT: acRound(i.orderProfit), NET_PROFIT: acRound(i.netProfit),
@@ -322,6 +323,8 @@ function acSkuCsvRow(i) {
     ORDER_QTY: i.orderQty, NET_QTY: i.netQty, UNIT_COST: acRound(i.unitCost),
     RETURN_RATE: i.returnRate != null ? acRound(i.returnRate * 100) + '%' : '',
     COUPON_FEE: '', PRE_COUPON_PROFIT: '', PROFIT: acRound(i.profit),
+    CURRENT_PRICE: st && st.cur != null ? acRound(st.cur) : '',
+    REPRICED: st && st.repriced ? 'YES' : '',
   };
 }
 
@@ -441,7 +444,7 @@ function acSkuTr(i) {
   // only one profit + a coupon attribution line.
   const profitCell = coupon
     ? `<td class="num"><b class="ac-loss">${fmt(i.profit)}</b><div class="ac-explain">pre-coupon ${fmt(i.preFreeProfit)} · coupon ${fmt(i.couponFee)}</div></td>`
-    : `<td class="num">${acKV('net', `<b style="color:${acColor(i.netProfit)};font-size:18px;">${fmt(i.netProfit)}</b>`)}${acKV('order', `<b style="color:${acColor(i.orderProfit)};">${fmt(i.orderProfit)}</b>`)}</td>`;
+    : `<td class="num">${acKV('net', `<b style="color:${acColor(i.netProfit)};font-size:15px;">${fmt(i.netProfit)}</b>`)}${acKV('order', `<b style="color:${acColor(i.orderProfit)};">${fmt(i.orderProfit)}</b>`)}</td>`;
 
   return `<tr>
     <td style="text-align:left;"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></td>
@@ -459,18 +462,101 @@ function acSkuTr(i) {
   </tr>`;
 }
 
+// ── Current listed prices (for "already repriced" detection) ─────────────────
+// The loss table is computed from HISTORICAL order prices, so a SKU whose price
+// was already raised keeps showing as a loss until the window rolls past. We
+// pull today's listed price and, when selling at it would already be profitable,
+// mark the row REPRICED instead of nagging with a suggestion.
+//   Amazon:  one bulk call — min live US variant price per clean SKU from the
+//            daily INFORMED_LISTINGS snapshot (price changes made today show up
+//            tomorrow).
+//   Shopify: no snapshot table — lazily fetch the live variant price for the
+//            PRICING rows only (concurrency 5), then re-render once.
+
+function acPriceKey(sku) {
+  const s = typeof cleanSkuKey === 'function' ? cleanSkuKey(sku) : String(sku || '');
+  return String(s).toUpperCase().trim();
+}
+
+async function acEnsureCurrentPrices() {
+  if (S._acPricesLoading) return;
+  const idx = S.acPriceIdx || (S.acPriceIdx = { amazon: {}, shopify: {}, amazonLoaded: false });
+  const shopifySkus = [...new Set((S._acInsights || [])
+    .filter(i => i.level === 'sku' && i.cause === 'PRICING' && String(i.platform).toLowerCase() === 'shopify')
+    .map(i => i.sku))].filter(s => !(s in idx.shopify));
+  if (idx.amazonLoaded && !shopifySkus.length) return;
+
+  S._acPricesLoading = true;
+  try {
+    const jobs = [];
+    if (!idx.amazonLoaded) {
+      jobs.push(acFetchJSON('/api/informed-set-price?bulk=1').then(j => {
+        Object.entries(j.prices || {}).forEach(([k, v]) => { idx.amazon[acPriceKey(k)] = Number(v); });
+        idx.amazonLoaded = true;
+      }).catch(() => {}));
+    }
+    const queue = [...shopifySkus];
+    const worker = async () => {
+      while (queue.length) {
+        const s = queue.shift();
+        try {
+          const j = await acFetchJSON(`/api/informed-set-price?platform=shopify&sku=${encodeURIComponent(s)}`);
+          const p = j.variants && j.variants[0] ? Number(j.variants[0].p) : NaN;
+          idx.shopify[s] = isFinite(p) ? p : null;
+        } catch { idx.shopify[s] = null; }
+      }
+    };
+    for (let k = 0; k < Math.min(5, shopifySkus.length); k++) jobs.push(worker());
+    await Promise.all(jobs);
+  } finally {
+    S._acPricesLoading = false;
+  }
+  if ((S.acLevel || 'order') === 'sku' && S.page === 'action') acRenderBody();
+}
+
+function acCurrentPrice(i) {
+  const idx = S.acPriceIdx;
+  if (!idx) return null;
+  const plat = String(i.platform || '').toLowerCase();
+  if (plat === 'amazon') { const p = idx.amazon[acPriceKey(i.sku)]; return p == null ? null : p; }
+  if (plat === 'shopify') { const p = idx.shopify[i.sku]; return p == null ? null : p; }
+  return null;
+}
+
+// Estimated per-unit profit if the window's orders had sold at the current
+// price (same naive back-out the suggestion uses — fee drift ignored).
+function acRepriceState(i) {
+  const qty = i.orderQty || 0;
+  if (!qty) return null;
+  const avgPrice = i.orderSales / qty;
+  const perUnit  = i.orderProfit / qty;
+  const suggested = Math.max(0.01, avgPrice + (2 - perUnit));
+  const cur = acCurrentPrice(i);
+  const estNow = cur == null ? null : perUnit + (cur - avgPrice);
+  return { avgPrice, perUnit, suggested, cur, estNow, repriced: estNow != null && estNow > 0 };
+}
+
 // Reprice control — Amazon & Shopify PRICING SKU rows. The button opens a
 // dropdown of the SKU's listing(s) with current price; suggested price is a
 // simple back-out to profit ≥ $2/unit from ORDER figures (fees already in):
 //   suggested = current_unit_price + ($2 − order_profit_per_unit)
 // Amazon → Informed manual price (all US variants); Shopify → the variant price.
+// Rows whose CURRENT price already yields positive profit show ✓ REPRICED
+// (still clickable to adjust) instead of a suggestion.
 function acRepriceCell(i) {
   const plat = String(i.platform || '').toLowerCase();
-  const qty = i.orderQty || 0;
-  if (i.skuKind === 'coupon' || !(plat === 'amazon' || plat === 'shopify') || i.cause !== 'PRICING' || !qty) return `<td class="num">${acDash}</td>`;
-  const suggested = Math.max(0.01, (i.orderSales / qty) + (2 - i.orderProfit / qty)).toFixed(2);
+  if (i.skuKind === 'coupon' || !(plat === 'amazon' || plat === 'shopify') || i.cause !== 'PRICING' || !(i.orderQty > 0)) return `<td class="num">${acDash}</td>`;
+  const st = acRepriceState(i);
+  const suggested = st.suggested.toFixed(2);
+  if (st.repriced) {
+    return `<td class="num"><button onclick="acRepriceOpen('${encodeURIComponent(i.sku)}',${suggested},'${plat}',this)"
+        title="Already repriced: now $${st.cur.toFixed(2)} (was ~$${st.avgPrice.toFixed(2)} in this window) → est ${fmt(st.estNow)}/unit. Click to adjust."
+        style="padding:4px 10px;border:1px solid rgba(22,163,74,.45);border-radius:6px;font-size:12px;font-weight:700;background:rgba(22,163,74,.12);color:#16a34a;cursor:pointer;white-space:nowrap;">✓ $${st.cur.toFixed(2)}</button>
+      <div class="ac-rst-sub" style="color:#16a34a;">repriced · ~${fmt(st.estNow)}/u</div></td>`;
+  }
+  const nowLine = st.cur != null ? `<div class="ac-rst-sub">now $${st.cur.toFixed(2)}</div>` : '';
   return `<td class="num"><button onclick="acRepriceOpen('${encodeURIComponent(i.sku)}',${suggested},'${plat}',this)"
-      style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:#2563eb;color:#fff;cursor:pointer;white-space:nowrap;">$${suggested} ▾</button></td>`;
+      style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:#2563eb;color:#fff;cursor:pointer;white-space:nowrap;">$${suggested} ▾</button>${nowLine}</td>`;
 }
 
 const acMoney = v => v == null ? '—' : '$' + Number(v).toFixed(2);
@@ -625,6 +711,10 @@ function renderActionCenterPage() {
   if (level === 'inv')     { acRenderInvPage(); return; }
   if (level === 'restock') { acRenderRestockPage(); return; }
 
+  // SKU level: fetch current listed prices in the background so PRICING rows
+  // already repriced get marked (re-renders the body once loaded).
+  if (level === 'sku') acEnsureCurrentPrices();
+
   const subtitle = level === 'order'
     ? 'Recent orders · 5-day rolling (dropship) · last 3 days (coupon)'
     : `Follows Product Detail Time Range · ${typeof trDisplay === 'function' ? trDisplay() : 'All time'} (coupon: last 3 days)`;
@@ -634,35 +724,29 @@ function renderActionCenterPage() {
   const sortOpts = [['loss', 'Biggest loss'], ['smallest', 'Smallest loss'], ['sku', 'SKU A–Z'], ['sales', 'Product sales'], ['qty', 'Quantity']]
     .map(([v, l]) => `<option value="${v}"${(S.acSort || 'loss') === v ? ' selected' : ''}>${l}</option>`).join('');
 
-  // Header card (stays fixed above the scrolling table): title · subtitle ·
-  // cause chips · downloads.
+  // Header card (stays fixed above the scrolling table). Row 1: title +
+  // subtitle | search / sort / downloads. Row 2: cause chips.
   hdrEl.innerHTML = `
     <div class="card" style="padding:14px 20px;">
-      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:22px;">⚠️</span>
-          <div>
-            <div style="font-size:18px;font-weight:800;color:var(--text);">Profit &lt; 0</div>
-            <div style="font-size:12px;color:var(--text3);">${level === 'order' ? 'Order Level' : 'SKU Level'} · ${subtitle} · <b id="acResultCount" style="color:#ef4444;"></b></div>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          ${Object.keys(counts).length
-            ? acCauseChips(counts, causeOrder, S.acCause)
-            : '<span style="font-size:13px;color:var(--text3);">No losses detected 🎉</span>'}
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <span style="font-size:22px;">⚠️</span>
+        <div style="min-width:0;">
+          <div style="font-size:18px;font-weight:800;color:var(--text);">${level === 'order' ? 'Order' : 'SKU'} Profit &lt; 0 <b id="acResultCount" style="font-size:13px;color:#ef4444;margin-left:6px;"></b></div>
+          <div style="font-size:12px;color:var(--text3);">${subtitle}</div>
         </div>
         <div style="flex:1;"></div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <div style="position:relative;display:flex;align-items:center;">
-            <input id="acSearch" value="${String(S.acSearch || '').replace(/"/g, '&quot;')}" oninput="acSearchChanged()" placeholder="Search SKU…" style="${ctrl}width:150px;padding-right:22px;"/>
-            <button id="acSearchClear" onclick="acClearSearch()" title="Clear" style="position:absolute;right:4px;border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;display:${S.acSearch ? '' : 'none'};">✕</button>
-          </div>
-          <select id="acSort" onchange="acSortChanged()" style="${ctrl}">${sortOpts}</select>
+        <div style="position:relative;display:flex;align-items:center;">
+          <input id="acSearch" value="${String(S.acSearch || '').replace(/"/g, '&quot;')}" oninput="acSearchChanged()" placeholder="Search SKU…" style="${ctrl}width:150px;padding-right:22px;"/>
+          <button id="acSearchClear" onclick="acClearSearch()" title="Clear" style="position:absolute;right:4px;border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;display:${S.acSearch ? '' : 'none'};">✕</button>
         </div>
-        <div class="dl-wrap" style="flex-direction:row;gap:8px;padding:6px 8px;">
-          <button class="dl-btn" onclick="acDownload('order')" title="Download all order-level insights (ignores the cause filter)">${dlIcon} Order CSV</button>
-          <button class="dl-btn" onclick="acDownload('sku')" title="Download all SKU-level insights (ignores the cause filter)">${dlIcon} SKU CSV</button>
-        </div>
+        <select id="acSort" onchange="acSortChanged()" style="${ctrl}">${sortOpts}</select>
+        <button class="dl-btn" onclick="acDownload('order')" title="Download all order-level insights (ignores the cause filter)">${dlIcon} Order CSV</button>
+        <button class="dl-btn" onclick="acDownload('sku')" title="Download all SKU-level insights (ignores the cause filter)">${dlIcon} SKU CSV</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:11px;padding-top:11px;border-top:1px solid var(--border);">
+        ${Object.keys(counts).length
+          ? acCauseChips(counts, causeOrder, S.acCause)
+          : '<span style="font-size:13px;color:var(--text3);">No losses detected 🎉</span>'}
       </div>
     </div>`;
 

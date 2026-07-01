@@ -16,6 +16,41 @@ function getPrivateKey() {
   const key = process.env.SNOWFLAKE_PRIVATE_KEY.replace(/\\n/g, '\n');
   return crypto.createPrivateKey({ key, format: 'pem' }).export({ type: 'pkcs8', format: 'pem' });
 }
+// Bulk mode (?bulk=1): one row per clean SKU with the lowest current US price —
+// used by the Action Center to mark loss rows whose price was already raised.
+// LIVE_MIN prefers live listings; ANY_MIN is the fallback when none are live.
+function fetchBulkPrices() {
+  return new Promise((resolve, reject) => {
+    const conn = snowflake.createConnection({
+      account: process.env.SNOWFLAKE_ACCOUNT, username: process.env.SNOWFLAKE_USERNAME,
+      authenticator: 'SNOWFLAKE_JWT', privateKey: getPrivateKey(),
+      database: process.env.SNOWFLAKE_DATABASE, schema: process.env.SNOWFLAKE_SCHEMA,
+      warehouse: process.env.SNOWFLAKE_WAREHOUSE, role: process.env.SNOWFLAKE_ROLE,
+    });
+    conn.connect(err => {
+      if (err) return reject(err);
+      conn.execute({
+        sqlText: `SELECT ${CLEAN_SQL} AS K,
+            MIN(CASE WHEN UPPER(STATUS) LIKE 'LIVE%' THEN TRY_TO_DOUBLE(CURRENT_PRICE) END) AS LIVE_MIN,
+            MIN(TRY_TO_DOUBLE(CURRENT_PRICE)) AS ANY_MIN
+          FROM ${LISTINGS_TABLE}
+          WHERE MARKETPLACE_ID = '${US_MARKETPLACE}'
+          GROUP BY 1`,
+        complete: (e, stmt, rows) => {
+          conn.destroy(() => {});
+          if (e) return reject(e);
+          const prices = {};
+          (rows || []).forEach(r => {
+            const p = r.LIVE_MIN != null ? r.LIVE_MIN : r.ANY_MIN;
+            if (r.K && p != null) prices[r.K] = p;
+          });
+          resolve(prices);
+        },
+      });
+    });
+  });
+}
+
 function fetchVariants(cleanSku) {
   return new Promise((resolve, reject) => {
     const conn = snowflake.createConnection({
@@ -142,6 +177,10 @@ module.exports = async function handler(req, res) {
   // single Shopify variant (live).
   if (req.method === 'GET') {
     const platform = String((req.query && req.query.platform) || 'amazon').toLowerCase();
+    if (req.query && req.query.bulk) {
+      try { return res.status(200).json({ prices: await fetchBulkPrices() }); }
+      catch (err) { console.error('[set-price GET bulk]', err); return res.status(502).json({ error: err.message }); }
+    }
     const sku = String((req.query && req.query.sku) || '').trim();
     if (!sku) return res.status(400).json({ error: 'sku query param required' });
     try {
