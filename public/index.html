@@ -206,7 +206,16 @@
       display: inline-flex; align-items: center; gap: 5px;
       font-size: 11px; font-weight: 700; letter-spacing: .03em;
       padding: 3px 9px; border-radius: 6px; text-transform: uppercase;
+      white-space: nowrap;
     }
+
+    /* Restock Alert tab */
+    .ac-rst-name {
+      font-size: 12px; color: var(--text3); margin-top: 2px;
+      max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ac-rst-loss { font-size: 11px; font-weight: 700; color: #ef4444; margin-top: 3px; white-space: nowrap; }
+    .ac-rst-sub  { font-size: 11px; color: var(--text3); margin-top: 2px; white-space: nowrap; }
     .ac-pricing  { background: rgba(239,68,68,.15);  color:#ef4444; border:1px solid rgba(239,68,68,.3); }
     .ac-dropship { background: rgba(245,158,11,.15); color:#f59e0b; border:1px solid rgba(245,158,11,.3); }
     .ac-coupon   { background: rgba(168,85,247,.15); color:#a855f7; border:1px solid rgba(168,85,247,.3); }
@@ -412,8 +421,8 @@
         <button class="toggle-btn"        onclick="setInventoryView('aging',this)">Slow Traffic</button>
       </div>
       <div class="toggle-group" id="acLevelToggle" style="display:none;">
-        <button class="toggle-btn active" id="acLevelOrderBtn" onclick="acSetLevel('order')">Order Level <span class="ac-lvl-count" id="acOrderCount">0</span></button>
-        <button class="toggle-btn"        id="acLevelSkuBtn"   onclick="acSetLevel('sku')">SKU Level <span class="ac-lvl-count" id="acSkuCount">0</span></button>
+        <button class="toggle-btn active" id="acLevelOrderBtn" onclick="acSetLevel('order')">Order Profit &lt; 0 <span class="ac-lvl-count" id="acOrderCount">0</span></button>
+        <button class="toggle-btn"        id="acLevelSkuBtn"   onclick="acSetLevel('sku')">SKU Profit &lt; 0 <span class="ac-lvl-count" id="acSkuCount">0</span></button>
         <button class="toggle-btn"        id="acLevelInvBtn"   onclick="acSetLevel('inv')">Inventory Check <span class="ac-lvl-count" id="acInvCount">0</span></button>
         <button class="toggle-btn"        id="acLevelRestockBtn" onclick="acSetLevel('restock')">Restock Alert <span class="ac-lvl-count" id="acRestockCount">0</span></button>
       </div>

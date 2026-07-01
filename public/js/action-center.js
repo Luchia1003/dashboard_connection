@@ -886,6 +886,7 @@ const AC_RESTOCK = {
     RESTOCK:      '60-day forecast exceeds current stock — plan the next PO',
   },
   URGENT_COVER_DAYS: 14,
+  MIN_ADU: 0.5,   // ignore SKUs selling slower than this (units/day, 30d window)
 };
 
 const AC_RESTOCK_COLS = ['URGENCY', 'SKU', 'PRODUCT_NAME', 'CHANNEL', 'AVAILABLE', 'ADU_30D',
@@ -905,6 +906,7 @@ function acBuildRestockList() {
 
     const available = acNum(r.AVAILABLE);
     const adu   = acNum(r.ADU_30D) || units30 / 30;
+    if (adu < AC_RESTOCK.MIN_ADU) return;
     const cover = adu > 0 ? available / adu : null;
     const tier  = available <= 0 ? 'OUT_OF_STOCK'
                : (cover != null && cover < AC_RESTOCK.URGENT_COVER_DAYS) ? 'URGENT'
@@ -935,37 +937,37 @@ function acRestockHead() {
     <th style="text-align:left;">SKU</th>
     <th style="text-align:left;">Channel</th>
     <th>Available</th>
-    <th>Sold /day (30d)</th>
+    <th>Sold / Day</th>
     <th>Cover</th>
     <th>Forecast 60d</th>
     <th>Suggest Qty</th>
     <th>Profit / Unit</th>
     <th>Est Profit</th>
-    <th>Est Cost</th>
   </tr>`;
 }
 
 function acRestockTr(i) {
   const coverCell = i.available <= 0
-    ? `<b style="color:#ef4444;">0 days</b>`
+    ? `<b style="color:#ef4444;">0d</b>${i.dailyLoss ? `<div class="ac-rst-loss">−${fmt(i.dailyLoss)}/day</div>` : ''}`
     : i.cover == null ? acDash
-    : `<b style="color:${i.cover < AC_RESTOCK.URGENT_COVER_DAYS ? '#f59e0b' : 'var(--text)'};">${i.cover.toFixed(i.cover < 10 ? 1 : 0)} days</b>`;
-  const explain = i.tier === 'OUT_OF_STOCK' && i.dailyLoss
-    ? `<div class="ac-explain">losing ~${fmt(i.dailyLoss)}/day</div>` : '';
+    : `<b style="color:${i.cover < AC_RESTOCK.URGENT_COVER_DAYS ? '#f59e0b' : 'var(--text)'};">${i.cover.toFixed(i.cover < 10 ? 1 : 0)}d</b>`;
   const costBadge = i.ppu == null
     ? ' <span class="ac-missing" title="No UNIT_COST in MASTER_COST — profit unknown">cost?</span>' : '';
   return `<tr>
     <td style="text-align:left;"><span class="ac-cause-badge ${AC_RESTOCK.TIER_CLASS[i.tier]}">${i.tier.replace(/_/g, ' ')}</span></td>
-    <td style="text-align:left;"><span class="ac-skubig">${i.sku || '—'}</span>${i.name ? `<div class="ac-skusmall">${i.name}</div>` : ''}</td>
+    <td style="text-align:left;">
+      <span class="ac-skubig">${i.sku || '—'}</span>
+      ${i.name ? `<div class="ac-rst-name" title="${String(i.name).replace(/"/g, '&quot;')}">${i.name}</div>` : ''}
+    </td>
     <td style="text-align:left;">${acRestockChannelPill(i.channel)}</td>
-    <td class="num"><b style="color:${i.available <= 0 ? '#ef4444' : 'var(--text)'};">${Math.round(i.available).toLocaleString()}</b></td>
-    <td class="num"><b>${i.adu.toFixed(1)}</b></td>
+    <td class="num"><b style="font-size:15px;color:${i.available <= 0 ? '#ef4444' : 'var(--text)'};">${Math.round(i.available).toLocaleString()}</b></td>
+    <td class="num"><b>${i.adu.toFixed(1)}</b><div class="ac-rst-sub">${Math.round(i.units30)} / 30d</div></td>
     <td class="num">${coverCell}</td>
     <td class="num"><b>${Math.round(i.forecast60).toLocaleString()}</b></td>
-    <td class="num"><b style="font-size:16px;color:#2563eb;">${Math.round(i.restock).toLocaleString()}</b></td>
+    <td class="num"><b style="font-size:17px;font-weight:800;color:#2563eb;">${Math.round(i.restock).toLocaleString()}</b></td>
     <td class="num"><b>${i.ppu == null ? '—' : fmt(i.ppu)}</b>${costBadge}</td>
-    <td class="num"><b style="color:#16a34a;">${i.estProfit == null ? '—' : fmt(i.estProfit)}</b>${explain}</td>
-    <td class="num"><b style="color:var(--text2);">${i.estCost == null ? '—' : fmt(i.estCost)}</b></td>
+    <td class="num"><b style="font-size:15px;color:#16a34a;">${i.estProfit == null ? '—' : fmt(i.estProfit)}</b>
+      ${i.estCost != null ? `<div class="ac-rst-sub">cost ${fmt(i.estCost)}</div>` : ''}</td>
   </tr>`;
 }
 
@@ -994,28 +996,22 @@ function acRenderRestockPage() {
 
   hdrEl.innerHTML = `
     <div class="card" style="padding:14px 20px;">
-      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:22px;">📦</span>
-          <div>
-            <div style="font-size:18px;font-weight:800;color:var(--text);">Selling Well · Restock</div>
-            <div style="font-size:12px;color:var(--text3);">Profitable SKUs whose stock won't cover the 60-day forecast · FBA + own warehouse · <b id="acRestockResultCount" style="color:#2563eb;"></b></div>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          ${list.length ? acRestockChips(counts, S.acRestockTier) : '<span style="font-size:13px;color:var(--text3);">Nothing needs restocking 🎉</span>'}
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <span style="font-size:22px;">📦</span>
+        <div style="min-width:0;">
+          <div style="font-size:18px;font-weight:800;color:var(--text);">Selling Well · Restock <b id="acRestockResultCount" style="font-size:13px;color:#2563eb;margin-left:6px;"></b></div>
+          <div style="font-size:12px;color:var(--text3);">Profitable · selling ≥ ${AC_RESTOCK.MIN_ADU}/day · stock under the 60-day forecast · FBA + own warehouse</div>
         </div>
         <div style="flex:1;"></div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <div style="position:relative;display:flex;align-items:center;">
-            <input id="acRestockSearch" value="${String(S.acRestockSearch || '').replace(/"/g, '&quot;')}" oninput="acRestockSearchChanged()" placeholder="Search SKU…" style="${ctrl}width:150px;padding-right:22px;"/>
-            <button id="acRestockSearchClear" onclick="acRestockClearSearch()" title="Clear" style="position:absolute;right:4px;border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;display:${S.acRestockSearch ? '' : 'none'};">✕</button>
-          </div>
-          <select id="acRestockSortSel" onchange="acRestockSortChanged()" style="${ctrl}">${sortOpts}</select>
+        <div style="position:relative;display:flex;align-items:center;">
+          <input id="acRestockSearch" value="${String(S.acRestockSearch || '').replace(/"/g, '&quot;')}" oninput="acRestockSearchChanged()" placeholder="Search SKU…" style="${ctrl}width:150px;padding-right:22px;"/>
+          <button id="acRestockSearchClear" onclick="acRestockClearSearch()" title="Clear" style="position:absolute;right:4px;border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;display:${S.acRestockSearch ? '' : 'none'};">✕</button>
         </div>
-        <div class="dl-wrap" style="flex-direction:row;gap:8px;padding:6px 8px;">
-          <button class="dl-btn" onclick="acRestockDownload()" title="Download the full restock list (ignores filters)">${dlIcon} CSV</button>
-        </div>
+        <select id="acRestockSortSel" onchange="acRestockSortChanged()" style="${ctrl}">${sortOpts}</select>
+        <button class="dl-btn" onclick="acRestockDownload()" title="Download the full restock list (ignores filters)">${dlIcon} CSV</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:11px;padding-top:11px;border-top:1px solid var(--border);">
+        ${list.length ? acRestockChips(counts, S.acRestockTier) : '<span style="font-size:13px;color:var(--text3);">Nothing needs restocking 🎉</span>'}
       </div>
     </div>`;
 
@@ -1051,7 +1047,7 @@ function acRestockRenderBody() {
   if (!list.length) {
     const msg = q ? `No SKUs matching "${S.acRestockSearch}"`
       : (S.acRestockTier ? `No ${S.acRestockTier.replace(/_/g, ' ')} SKUs` : 'Nothing needs restocking 🎉');
-    bodyEl.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    bodyEl.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
   bodyEl.innerHTML = list.map(acRestockTr).join('');
