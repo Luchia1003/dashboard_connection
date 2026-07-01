@@ -65,7 +65,7 @@ async function acFetchJSON(url) {
 async function loadActionCenterData() {
   const ready = Array.isArray(S.orderDetail) && Array.isArray(S.couponOrder) &&
                 Array.isArray(S.couponSku)   && Array.isArray(S.sku) &&
-                Array.isArray(S.inventoryForecast);
+                Array.isArray(S.inventoryForecast) && Array.isArray(S.invRecon);
   if (ready) { acBuildInvIndexes(); renderActionCenterPage(); return; }
 
   acRenderLoading();
@@ -78,6 +78,8 @@ async function loadActionCenterData() {
     // Inventory pool (current stock) + forecast (restock signal) — supplementary.
     if (!Array.isArray(S.inventoryPool))     jobs.push(acFetchJSON('/api/inventory-pool').then(d => { S.inventoryPool = d; }).catch(() => { S.inventoryPool = []; }));
     if (!Array.isArray(S.inventoryForecast)) jobs.push(acFetchJSON('/api/inventory-forecast').then(d => { S.inventoryForecast = d; }).catch(() => { S.inventoryForecast = []; }));
+    // Amazon ⟷ supplier master inventory reconciliation (Inventory Check tab).
+    if (!Array.isArray(S.invRecon)) jobs.push(acFetchJSON('/api/inventory-reconciliation').then(d => { S.invRecon = d; }).catch(() => { S.invRecon = []; }));
     await Promise.all(jobs);
     acBuildInvIndexes();
     renderActionCenterPage();
@@ -574,8 +576,10 @@ function acCauseChips(counts, causeOrder, active) {
 function acSyncLevelToggle(orderN, skuN, level) {
   const set = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
   set('acOrderCount', orderN); set('acSkuCount', skuN);
+  set('acInvCount', (S.invRecon || []).length);
   const ob = document.getElementById('acLevelOrderBtn'); if (ob) ob.classList.toggle('active', level === 'order');
   const sb = document.getElementById('acLevelSkuBtn');   if (sb) sb.classList.toggle('active', level === 'sku');
+  const ib = document.getElementById('acLevelInvBtn');   if (ib) ib.classList.toggle('active', level === 'inv');
 }
 
 function acSetLevel(level) {
@@ -597,7 +601,8 @@ function renderActionCenterPage() {
   const hdrEl  = document.getElementById('actionHeader');
   if (!bodyEl || !headEl || !hdrEl) return;
   const ready = Array.isArray(S.orderDetail) && Array.isArray(S.couponOrder) &&
-                Array.isArray(S.couponSku)   && Array.isArray(S.sku);
+                Array.isArray(S.couponSku)   && Array.isArray(S.sku) &&
+                Array.isArray(S.invRecon);
   if (!ready) { loadActionCenterData(); return; }
 
   const insights = acBuildInsights();
@@ -611,6 +616,9 @@ function renderActionCenterPage() {
   const causeOrder = level === 'order' ? ['PRICING', 'DROPSHIP', 'COUPON'] : ['PRICING', 'RETURN', 'COUPON'];
 
   acSyncLevelToggle(orderInsights.length, skuInsights.length, level);
+
+  // Inventory Check has its own header/table — everything below is the loss board.
+  if (level === 'inv') { acRenderInvPage(); return; }
 
   const subtitle = level === 'order'
     ? 'Recent orders · 5-day rolling (dropship) · last 3 days (coupon)'
@@ -709,3 +717,155 @@ window.acSortChanged = function () {
   S.acSort = (document.getElementById('acSort') || {}).value || 'loss';
   acRenderBody();
 };
+
+// ── Inventory Check (Amazon qty 0 · supplier master stock > 0) ────────────────
+// Mirrors the daily manual reconciliation: All Listings Report vs
+// MASTER_INVENTORY_SNAP. Data is precomputed daily on the Snowflake side
+// (DASHBOARD_DB.INVENTORY_RECONCILIATION, rebuilt by the All Listings GitHub
+// Action ~10:30 UTC) — the page just filters/sorts/renders it.
+
+const AC_INV_COLS = ['SKU', 'AMAZON_INVENTORY', 'AMAZON_STATUS', 'MASTER_INVENTORY', 'DIFF',
+  'WAREHOUSE_BREAKDOWN', 'MASTER_FLAG', 'OVERRIDE_FLAG', 'MISSED_SUPPLIER_INVENTORY', 'RUN_DATE'];
+
+function acInvHead() {
+  return `<tr>
+    <th style="text-align:left;">SKU</th>
+    <th style="text-align:left;">Amazon Status</th>
+    <th>Amazon Qty</th>
+    <th>Supplier Qty</th>
+    <th>Diff</th>
+    <th style="text-align:left;">Warehouse Breakdown</th>
+    <th style="text-align:left;">Master Flag</th>
+    <th style="text-align:left;">Override</th>
+    <th style="text-align:left;">Missed Supplier</th>
+  </tr>`;
+}
+
+function acInvTr(r) {
+  const status = String(r.AMAZON_STATUS || '');
+  const active = /^active$/i.test(status);
+  const whs = String(r.WAREHOUSE_BREAKDOWN || '')
+    .split(', ')
+    .filter(Boolean)
+    .map(w => `<div style="font-size:11px;color:var(--text2);white-space:nowrap;">${w}</div>`)
+    .join('');
+  const forced = r.OVERRIDE_FLAG === 'FORCED_ZERO';
+  const missed = r.MISSED_SUPPLIER_INVENTORY === 'YES';
+  return `<tr${forced ? ' style="opacity:.55;"' : ''}>
+    <td style="text-align:left;"><span class="ac-skubig">${r.SKU || '—'}</span></td>
+    <td style="text-align:left;"><b style="color:${active ? '#16a34a' : 'var(--text2)'};">${status || '—'}</b></td>
+    <td class="num"><b>${Math.round(acNum(r.AMAZON_INVENTORY)).toLocaleString()}</b></td>
+    <td class="num"><b>${Math.round(acNum(r.MASTER_INVENTORY)).toLocaleString()}</b></td>
+    <td class="num"><b style="color:#ef4444;">+${Math.round(acNum(r.DIFF)).toLocaleString()}</b></td>
+    <td style="text-align:left;">${whs || acDash}</td>
+    <td style="text-align:left;color:var(--text2);">${r.MASTER_FLAG || acDash}</td>
+    <td style="text-align:left;">${forced
+      ? '<span class="ac-cause-badge" style="background:rgba(100,116,139,.15);color:var(--text2);">FORCED_ZERO</span>'
+      : '<span style="color:var(--text3);">normal</span>'}</td>
+    <td style="text-align:left;">${missed
+      ? '<span class="ac-cause-badge" style="background:rgba(245,158,11,.15);color:#f59e0b;">YES</span>'
+      : '<span style="color:var(--text3);">no</span>'}</td>
+  </tr>`;
+}
+
+function acRenderInvPage() {
+  const headEl = document.getElementById('actionHead');
+  const hdrEl  = document.getElementById('actionHeader');
+  if (!headEl || !hdrEl) return;
+
+  const rows = S.invRecon || [];
+  const first = rows[0] || {};
+  const snapDate = String(first.RUN_DATE || '').slice(0, 10);
+  const genAt    = String(first.GENERATED_AT || '').slice(0, 16).replace('T', ' ');
+  const meta = rows.length
+    ? `Amazon listing snapshot ${snapDate || '—'}${genAt ? ` · generated ${genAt} UTC` : ''}`
+    : 'No reconciliation data yet — the daily job runs ~10:30 UTC';
+
+  const dlIcon = '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>';
+  const ctrl = 'padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg);color:var(--text);';
+  const sortOpts = [['diff', 'Biggest diff'], ['sku', 'SKU A–Z'], ['master', 'Supplier qty']]
+    .map(([v, l]) => `<option value="${v}"${(S.acInvSort || 'diff') === v ? ' selected' : ''}>${l}</option>`).join('');
+
+  hdrEl.innerHTML = `
+    <div class="card" style="padding:14px 20px;">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:22px;">📋</span>
+          <div>
+            <div style="font-size:18px;font-weight:800;color:var(--text);">Amazon 0 · Supplier &gt; 0</div>
+            <div style="font-size:12px;color:var(--text3);">Inventory Check · ${meta} · <b id="acInvResultCount" style="color:#ef4444;"></b></div>
+          </div>
+        </div>
+        <div style="flex:1;"></div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="position:relative;display:flex;align-items:center;">
+            <input id="acInvSearch" value="${String(S.acInvSearch || '').replace(/"/g, '&quot;')}" oninput="acInvSearchChanged()" placeholder="Search SKU…" style="${ctrl}width:150px;padding-right:22px;"/>
+            <button id="acInvSearchClear" onclick="acInvClearSearch()" title="Clear" style="position:absolute;right:4px;border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;display:${S.acInvSearch ? '' : 'none'};">✕</button>
+          </div>
+          <select id="acInvSort" onchange="acInvSortChanged()" style="${ctrl}">${sortOpts}</select>
+        </div>
+        <div class="dl-wrap" style="flex-direction:row;gap:8px;padding:6px 8px;">
+          <button class="dl-btn" onclick="acInvDownload()" title="Download the full reconciliation list">${dlIcon} CSV</button>
+        </div>
+      </div>
+    </div>`;
+
+  headEl.innerHTML = acInvHead();
+  acInvRenderBody();
+}
+
+function acInvRenderBody() {
+  const bodyEl = document.getElementById('actionBody');
+  if (!bodyEl) return;
+  const full = S.invRecon || [];
+
+  let list = full;
+  const q = String(S.acInvSearch || '').trim().toLowerCase();
+  if (q) list = list.filter(r => String(r.SKU || '').toLowerCase().includes(q));
+
+  const cmp = {
+    diff:   (a, b) => acNum(b.DIFF) - acNum(a.DIFF),
+    sku:    (a, b) => String(a.SKU || '').localeCompare(String(b.SKU || '')),
+    master: (a, b) => acNum(b.MASTER_INVENTORY) - acNum(a.MASTER_INVENTORY),
+  }[S.acInvSort || 'diff'];
+  list = [...list].sort(cmp);
+
+  const cnt = document.getElementById('acInvResultCount');
+  if (cnt) cnt.textContent = `${list.length}${q ? ` / ${full.length}` : ''} SKUs`;
+
+  if (!list.length) {
+    const msg = q ? `No SKUs matching "${S.acInvSearch}"` : 'No mismatches — Amazon and supplier inventory agree 🎉';
+    bodyEl.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    return;
+  }
+  bodyEl.innerHTML = list.map(acInvTr).join('');
+}
+
+window.acInvSearchChanged = function () {
+  S.acInvSearch = (document.getElementById('acInvSearch') || {}).value || '';
+  const b = document.getElementById('acInvSearchClear'); if (b) b.style.display = S.acInvSearch ? '' : 'none';
+  acInvRenderBody();
+};
+window.acInvClearSearch = function () {
+  S.acInvSearch = '';
+  const i = document.getElementById('acInvSearch'); if (i) i.value = '';
+  const b = document.getElementById('acInvSearchClear'); if (b) b.style.display = 'none';
+  acInvRenderBody();
+};
+window.acInvSortChanged = function () {
+  S.acInvSort = (document.getElementById('acInvSort') || {}).value || 'diff';
+  acInvRenderBody();
+};
+
+// Download the full list (ignores search).
+function acInvDownload() {
+  const rows = (S.invRecon || []).map(r => {
+    const o = {};
+    AC_INV_COLS.forEach(c => { o[c] = c === 'RUN_DATE' ? String(r[c] || '').slice(0, 10) : (r[c] ?? ''); });
+    return o;
+  });
+  if (!rows.length) { alert('No reconciliation rows to download.'); return; }
+  const stamp = typeof todayStamp === 'function' ? todayStamp() : '';
+  downloadCSV(rows, `inventory_reconciliation_${stamp}.csv`, AC_INV_COLS);
+}
+window.acInvDownload = acInvDownload;
