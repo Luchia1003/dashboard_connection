@@ -577,9 +577,11 @@ function acSyncLevelToggle(orderN, skuN, level) {
   const set = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
   set('acOrderCount', orderN); set('acSkuCount', skuN);
   set('acInvCount', (S.invRecon || []).length);
+  set('acRestockCount', (S._acRestockList || []).length);
   const ob = document.getElementById('acLevelOrderBtn'); if (ob) ob.classList.toggle('active', level === 'order');
   const sb = document.getElementById('acLevelSkuBtn');   if (sb) sb.classList.toggle('active', level === 'sku');
   const ib = document.getElementById('acLevelInvBtn');   if (ib) ib.classList.toggle('active', level === 'inv');
+  const rb = document.getElementById('acLevelRestockBtn'); if (rb) rb.classList.toggle('active', level === 'restock');
 }
 
 function acSetLevel(level) {
@@ -615,10 +617,13 @@ function renderActionCenterPage() {
   const counts   = acCauseCounts(fullList);
   const causeOrder = level === 'order' ? ['PRICING', 'DROPSHIP', 'COUPON'] : ['PRICING', 'RETURN', 'COUPON'];
 
+  S._acRestockList = acBuildRestockList();
   acSyncLevelToggle(orderInsights.length, skuInsights.length, level);
 
-  // Inventory Check has its own header/table — everything below is the loss board.
-  if (level === 'inv') { acRenderInvPage(); return; }
+  // Inventory Check / Restock Alert have their own header/table — everything
+  // below is the loss board.
+  if (level === 'inv')     { acRenderInvPage(); return; }
+  if (level === 'restock') { acRenderRestockPage(); return; }
 
   const subtitle = level === 'order'
     ? 'Recent orders · 5-day rolling (dropship) · last 3 days (coupon)'
@@ -856,6 +861,239 @@ window.acInvSortChanged = function () {
   S.acInvSort = (document.getElementById('acInvSort') || {}).value || 'diff';
   acInvRenderBody();
 };
+
+// ── Restock Alert (selling well · profitable · stock running out) ─────────────
+// The mirror of the Profit < 0 board: SKUs that MAKE money and whose inventory
+// won't cover forecast demand. Pure frontend over DASHBOARD_DB.INVENTORY_FORECAST
+// (already loaded as S.inventoryForecast).
+//
+// Channel rows used: amazon_fba + total ONLY. The nonfba and shopify rows each
+// compute RESTOCK_NEEDED against the SAME HnP warehouse pool, so using them
+// would double-count demand — 'total' is that pool's combined row.
+//
+// Qualification (all must hold):
+//   1. RESTOCK_THRESHOLD_MET = 'Y'  (dynamic per-velocity threshold, Snowflake side)
+//   2. UNITS_30D > 0                (real recent sales, not just model output)
+//   3. PROFIT_PER_UNIT > 0 or NULL  (loss-makers belong to Profit < 0 — fix price
+//                                    first; NULL = missing cost, kept with a badge)
+
+const AC_RESTOCK = {
+  TIER_PRIORITY: { OUT_OF_STOCK: 3, URGENT: 2, RESTOCK: 1 },
+  TIER_CLASS:    { OUT_OF_STOCK: 'ac-pricing', URGENT: 'ac-dropship', RESTOCK: 'ac-coupon' },
+  TIER_SUGGEST: {
+    OUT_OF_STOCK: 'Still selling but 0 on hand — losing sales every day, restock first',
+    URGENT:       'Less than 14 days of cover left — restock before the supplier lead time runs out',
+    RESTOCK:      '60-day forecast exceeds current stock — plan the next PO',
+  },
+  URGENT_COVER_DAYS: 14,
+};
+
+const AC_RESTOCK_COLS = ['URGENCY', 'SKU', 'PRODUCT_NAME', 'CHANNEL', 'AVAILABLE', 'ADU_30D',
+  'COVER_DAYS', 'FORECAST_60D', 'RESTOCK_NEEDED', 'PROFIT_PER_UNIT', 'EST_RESTOCK_PROFIT', 'EST_RESTOCK_COST'];
+
+function acBuildRestockList() {
+  const out = [];
+  (S.inventoryForecast || []).forEach(r => {
+    const ch = String(r.CHANNEL || '').toLowerCase();
+    if (ch !== 'amazon_fba' && ch !== 'total') return;
+    if (String(r.RESTOCK_THRESHOLD_MET || '').toUpperCase() !== 'Y') return;
+    const units30 = acNum(r.UNITS_30D);
+    const restock = acNum(r.RESTOCK_NEEDED);
+    if (units30 <= 0 || restock <= 0) return;
+    const ppu = r.PROFIT_PER_UNIT == null ? null : Number(r.PROFIT_PER_UNIT);
+    if (ppu != null && ppu <= 0) return;
+
+    const available = acNum(r.AVAILABLE);
+    const adu   = acNum(r.ADU_30D) || units30 / 30;
+    const cover = adu > 0 ? available / adu : null;
+    const tier  = available <= 0 ? 'OUT_OF_STOCK'
+               : (cover != null && cover < AC_RESTOCK.URGENT_COVER_DAYS) ? 'URGENT'
+               : 'RESTOCK';
+
+    out.push({
+      sku: r.ORIGINAL_SKU || '', name: r.PRODUCT_NAME || '', channel: ch, tier,
+      available, adu, cover, units30,
+      forecast60: acNum(r.FORECAST_60D), restock,
+      ppu,
+      estProfit: ppu == null ? null : acNum(r.EST_RESTOCK_PROFIT),
+      estCost:   r.EST_RESTOCK_COST == null ? null : acNum(r.EST_RESTOCK_COST),
+      dailyLoss: ppu == null ? null : adu * ppu,   // what a stockout costs per day
+    });
+  });
+  return out;
+}
+
+function acRestockChannelPill(ch) {
+  return ch === 'amazon_fba'
+    ? '<span class="ac-plat" style="color:#7c3aed;background:rgba(124,58,237,.12);">FBA</span>'
+    : '<span class="ac-plat" style="color:#0891b2;background:rgba(8,145,178,.12);">Warehouse</span>';
+}
+
+function acRestockHead() {
+  return `<tr>
+    <th style="text-align:left;">Urgency</th>
+    <th style="text-align:left;">SKU</th>
+    <th style="text-align:left;">Channel</th>
+    <th>Available</th>
+    <th>Sold /day (30d)</th>
+    <th>Cover</th>
+    <th>Forecast 60d</th>
+    <th>Suggest Qty</th>
+    <th>Profit / Unit</th>
+    <th>Est Profit</th>
+    <th>Est Cost</th>
+  </tr>`;
+}
+
+function acRestockTr(i) {
+  const coverCell = i.available <= 0
+    ? `<b style="color:#ef4444;">0 days</b>`
+    : i.cover == null ? acDash
+    : `<b style="color:${i.cover < AC_RESTOCK.URGENT_COVER_DAYS ? '#f59e0b' : 'var(--text)'};">${i.cover.toFixed(i.cover < 10 ? 1 : 0)} days</b>`;
+  const explain = i.tier === 'OUT_OF_STOCK' && i.dailyLoss
+    ? `<div class="ac-explain">losing ~${fmt(i.dailyLoss)}/day</div>` : '';
+  const costBadge = i.ppu == null
+    ? ' <span class="ac-missing" title="No UNIT_COST in MASTER_COST — profit unknown">cost?</span>' : '';
+  return `<tr>
+    <td style="text-align:left;"><span class="ac-cause-badge ${AC_RESTOCK.TIER_CLASS[i.tier]}">${i.tier.replace(/_/g, ' ')}</span></td>
+    <td style="text-align:left;"><span class="ac-skubig">${i.sku || '—'}</span>${i.name ? `<div class="ac-skusmall">${i.name}</div>` : ''}</td>
+    <td style="text-align:left;">${acRestockChannelPill(i.channel)}</td>
+    <td class="num"><b style="color:${i.available <= 0 ? '#ef4444' : 'var(--text)'};">${Math.round(i.available).toLocaleString()}</b></td>
+    <td class="num"><b>${i.adu.toFixed(1)}</b></td>
+    <td class="num">${coverCell}</td>
+    <td class="num"><b>${Math.round(i.forecast60).toLocaleString()}</b></td>
+    <td class="num"><b style="font-size:16px;color:#2563eb;">${Math.round(i.restock).toLocaleString()}</b></td>
+    <td class="num"><b>${i.ppu == null ? '—' : fmt(i.ppu)}</b>${costBadge}</td>
+    <td class="num"><b style="color:#16a34a;">${i.estProfit == null ? '—' : fmt(i.estProfit)}</b>${explain}</td>
+    <td class="num"><b style="color:var(--text2);">${i.estCost == null ? '—' : fmt(i.estCost)}</b></td>
+  </tr>`;
+}
+
+function acRestockChips(counts, active) {
+  return ['OUT_OF_STOCK', 'URGENT', 'RESTOCK'].filter(t => counts[t]).map(t => {
+    const cls = active === t ? 'ac-cchip active' : (active ? 'ac-cchip dim' : 'ac-cchip');
+    return `<button class="${cls}" onclick="acRestockToggleTier('${t}')" title="${AC_RESTOCK.TIER_SUGGEST[t]}">
+        <span class="ac-cause-badge ${AC_RESTOCK.TIER_CLASS[t]}">${t.replace(/_/g, ' ')}</span><b>${counts[t]}</b>
+      </button>`;
+  }).join('');
+}
+
+function acRenderRestockPage() {
+  const headEl = document.getElementById('actionHead');
+  const hdrEl  = document.getElementById('actionHeader');
+  if (!headEl || !hdrEl) return;
+
+  const list = S._acRestockList || [];
+  const counts = {};
+  list.forEach(i => { counts[i.tier] = (counts[i.tier] || 0) + 1; });
+
+  const dlIcon = '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>';
+  const ctrl = 'padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg);color:var(--text);';
+  const sortOpts = [['priority', 'Priority'], ['profit', 'Est profit'], ['cover', 'Days of cover'], ['adu', 'Sales velocity'], ['sku', 'SKU A–Z']]
+    .map(([v, l]) => `<option value="${v}"${(S.acRestockSort || 'priority') === v ? ' selected' : ''}>${l}</option>`).join('');
+
+  hdrEl.innerHTML = `
+    <div class="card" style="padding:14px 20px;">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:22px;">📦</span>
+          <div>
+            <div style="font-size:18px;font-weight:800;color:var(--text);">Selling Well · Restock</div>
+            <div style="font-size:12px;color:var(--text3);">Profitable SKUs whose stock won't cover the 60-day forecast · FBA + own warehouse · <b id="acRestockResultCount" style="color:#2563eb;"></b></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          ${list.length ? acRestockChips(counts, S.acRestockTier) : '<span style="font-size:13px;color:var(--text3);">Nothing needs restocking 🎉</span>'}
+        </div>
+        <div style="flex:1;"></div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="position:relative;display:flex;align-items:center;">
+            <input id="acRestockSearch" value="${String(S.acRestockSearch || '').replace(/"/g, '&quot;')}" oninput="acRestockSearchChanged()" placeholder="Search SKU…" style="${ctrl}width:150px;padding-right:22px;"/>
+            <button id="acRestockSearchClear" onclick="acRestockClearSearch()" title="Clear" style="position:absolute;right:4px;border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;display:${S.acRestockSearch ? '' : 'none'};">✕</button>
+          </div>
+          <select id="acRestockSortSel" onchange="acRestockSortChanged()" style="${ctrl}">${sortOpts}</select>
+        </div>
+        <div class="dl-wrap" style="flex-direction:row;gap:8px;padding:6px 8px;">
+          <button class="dl-btn" onclick="acRestockDownload()" title="Download the full restock list (ignores filters)">${dlIcon} CSV</button>
+        </div>
+      </div>
+    </div>`;
+
+  headEl.innerHTML = acRestockHead();
+  acRestockRenderBody();
+}
+
+function acRestockRenderBody() {
+  const bodyEl = document.getElementById('actionBody');
+  if (!bodyEl) return;
+  const full = S._acRestockList || [];
+
+  let list = S.acRestockTier ? full.filter(i => i.tier === S.acRestockTier) : full;
+  const q = String(S.acRestockSearch || '').trim().toLowerCase();
+  if (q) list = list.filter(i => String(i.sku).toLowerCase().includes(q) || String(i.name).toLowerCase().includes(q));
+
+  const cmp = {
+    // tier first, then the money at stake (missing profit sorts last within tier)
+    priority: (a, b) => {
+      const pa = AC_RESTOCK.TIER_PRIORITY[a.tier], pb = AC_RESTOCK.TIER_PRIORITY[b.tier];
+      return pa !== pb ? pb - pa : (b.estProfit || 0) - (a.estProfit || 0);
+    },
+    profit: (a, b) => (b.estProfit || 0) - (a.estProfit || 0),
+    cover:  (a, b) => (a.cover ?? 1e9) - (b.cover ?? 1e9),
+    adu:    (a, b) => b.adu - a.adu,
+    sku:    (a, b) => String(a.sku).localeCompare(String(b.sku)),
+  }[S.acRestockSort || 'priority'];
+  list = [...list].sort(cmp);
+
+  const cnt = document.getElementById('acRestockResultCount');
+  if (cnt) cnt.textContent = `${list.length}${(S.acRestockTier || q) ? ` / ${full.length}` : ''} SKUs`;
+
+  if (!list.length) {
+    const msg = q ? `No SKUs matching "${S.acRestockSearch}"`
+      : (S.acRestockTier ? `No ${S.acRestockTier.replace(/_/g, ' ')} SKUs` : 'Nothing needs restocking 🎉');
+    bodyEl.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    return;
+  }
+  bodyEl.innerHTML = list.map(acRestockTr).join('');
+}
+
+window.acRestockToggleTier = function (tier) {
+  S.acRestockTier = (S.acRestockTier === tier) ? '' : tier;
+  acRenderRestockPage();
+};
+window.acRestockSearchChanged = function () {
+  S.acRestockSearch = (document.getElementById('acRestockSearch') || {}).value || '';
+  const b = document.getElementById('acRestockSearchClear'); if (b) b.style.display = S.acRestockSearch ? '' : 'none';
+  acRestockRenderBody();
+};
+window.acRestockClearSearch = function () {
+  S.acRestockSearch = '';
+  const i = document.getElementById('acRestockSearch'); if (i) i.value = '';
+  const b = document.getElementById('acRestockSearchClear'); if (b) b.style.display = 'none';
+  acRestockRenderBody();
+};
+window.acRestockSortChanged = function () {
+  S.acRestockSort = (document.getElementById('acRestockSortSel') || {}).value || 'priority';
+  acRestockRenderBody();
+};
+
+// Download the full list (ignores tier filter + search).
+function acRestockDownload() {
+  const rows = (S._acRestockList && S._acRestockList.length ? S._acRestockList : acBuildRestockList()).map(i => ({
+    URGENCY: i.tier, SKU: i.sku, PRODUCT_NAME: i.name,
+    CHANNEL: i.channel === 'amazon_fba' ? 'FBA' : 'Warehouse (FBM+Shopify)',
+    AVAILABLE: Math.round(i.available), ADU_30D: acRound(i.adu),
+    COVER_DAYS: i.cover == null ? '' : acRound(i.cover),
+    FORECAST_60D: Math.round(i.forecast60), RESTOCK_NEEDED: Math.round(i.restock),
+    PROFIT_PER_UNIT: i.ppu == null ? '' : acRound(i.ppu),
+    EST_RESTOCK_PROFIT: i.estProfit == null ? '' : acRound(i.estProfit),
+    EST_RESTOCK_COST: i.estCost == null ? '' : acRound(i.estCost),
+  }));
+  if (!rows.length) { alert('No restock rows to download.'); return; }
+  const stamp = typeof todayStamp === 'function' ? todayStamp() : '';
+  downloadCSV(rows, `restock_alert_${stamp}.csv`, AC_RESTOCK_COLS);
+}
+window.acRestockDownload = acRestockDownload;
 
 // Download the full list (ignores search).
 function acInvDownload() {
