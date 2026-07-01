@@ -30,12 +30,20 @@ module.exports = async function handler(req, res) {
   const user = requireAuth(req, res);
   if (!user) return;
 
+  // One function serves two datasets (Vercel Hobby caps deployments at 12
+  // functions): the default SKU_INVENTORY_POOL, and ?view=reconciliation →
+  // INVENTORY_RECONCILIATION (Action Center Inventory Check; also reachable
+  // as /api/inventory-reconciliation via a vercel.json rewrite).
+  const table = req.query && req.query.view === 'reconciliation'
+    ? 'INVENTORY_RECONCILIATION'
+    : 'SKU_INVENTORY_POOL';
+
   const conn = getConnection();
   try {
     await new Promise((resolve, reject) => conn.connect(err => err ? reject(err) : resolve()));
     const rows = await new Promise((resolve, reject) => {
       conn.execute({
-        sqlText: `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.SKU_INVENTORY_POOL `,
+        sqlText: `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.${table} `,
         complete: (err, stmt, rows) => err ? reject(err) : resolve(rows),
       });
     });

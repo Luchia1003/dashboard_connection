@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/api/inventory-reconciliation", "destination": "/api/inventory-pool?view=reconciliation" },
     { "source": "/api/(.*)", "destination": "/api/$1" }
   ],
   "outputDirectory": "public"
