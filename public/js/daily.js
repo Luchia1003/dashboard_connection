@@ -330,6 +330,21 @@ function renderYoYTotals({ filtered, lyData, field, metricLabel, isOrders, minDa
 function renderYoYChart(filtered, all, mode) {
   document.getElementById('skelYoy').style.display = 'none';
 
+  // A multi-year Time Range (e.g. All) would sum every year into the "current"
+  // series and compare it against a 1-year-shifted window that mostly overlaps
+  // itself — both totals and the YoY % become meaningless. When the selected
+  // range spans more than a year, clamp the YoY view to the latest calendar
+  // year in the range (YTD), so "last year" truly is the previous year's same
+  // period. Ranges ≤ 1 year are untouched.
+  if (filtered.length) {
+    const first = filtered[0].DATE, last = filtered[filtered.length - 1].DATE;
+    const spanDays = (new Date(last + 'T00:00:00') - new Date(first + 'T00:00:00')) / 86400000;
+    if (spanDays > 366) {
+      const jan1 = last.slice(0, 4) + '-01-01';
+      filtered = filtered.filter(r => r.DATE >= jan1);
+    }
+  }
+
   const yoyMetric = S.yoyMetric || 'revenue';
   const f = salesF(mode);
   const fieldMap = { orders: f.orders, revenue: f.rev, profit: f.profit, productSales: f.pSales, margin: f.margin };
