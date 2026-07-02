@@ -75,24 +75,33 @@ function acMarginNorms() {
   return S._acNorms;
 }
 
-// Returns { events, adjProfit, normRate } when the group's loss is explained by
-// one-off events, else null.
+// Detect event days for a loss group. Returns null when there are none;
+// otherwise { events, adjProfit, exSales, exQty, exProfit }:
+//   adjProfit — window profit with event days RESTORED to the normal margin
+//               rate (≥ 0 → the loss is fully event-driven → ONEOFF);
+//   ex*       — the group's totals with event days EXCLUDED entirely (the
+//               "normal day" economics the reprice suggestion is based on).
 function acOneOffCheck(g, norms) {
   const norm = norms.skuRate.get(`${g.platform}|${g.sku}`) ?? norms.platRate.get(g.platform);
   if (!(norm > 0)) return null;
   const events = [];
-  let adj = 0;
+  let adj = 0, evSales = 0, evQty = 0, evProfit = 0;
   (g.days || []).forEach(d => {
     if (!(d.sls > 0)) return;
     const shortfall = norm * d.sls - d.mg;
     if (d.mg / d.sls < norm * AC_ONEOFF.RATE_FACTOR && shortfall >= AC_ONEOFF.MIN_SHORTFALL) {
       events.push({ date: d.date, mg: d.mg, exp: norm * d.sls });
       adj += shortfall;
+      evSales += d.sls; evQty += d.qty; evProfit += d.profit;
     }
   });
   if (!events.length) return null;
-  const adjProfit = g.orderProfit + adj;
-  return adjProfit >= 0 ? { events, adjProfit, normRate: norm } : null;
+  return {
+    events, adjProfit: g.orderProfit + adj, normRate: norm,
+    exSales: g.orderSales - evSales,
+    exQty: g.orderQty - evQty,
+    exProfit: g.orderProfit - evProfit,
+  };
 }
 
 function acOneOffTip(i) {
@@ -320,7 +329,8 @@ function acSkuPricingReturn() {
       groups.set(k, g);
     }
     g.days.push({ date: String(r.DATE || '').slice(0, 10),
-                  sls: acNum(r.ORDER_PRODUCT_SALES), mg: acNum(r.ORDER_MARGIN) });
+                  sls: acNum(r.ORDER_PRODUCT_SALES), mg: acNum(r.ORDER_MARGIN),
+                  qty: acNum(r.ORDER_QUANTITY), profit: acNum(r.ORDER_PROFIT) });
     g.orderProfit += acNum(r.ORDER_PROFIT);
     g.netProfit   += acNum(r.NET_PROFIT);
     g.orderSales  += acNum(r.ORDER_PRODUCT_SALES);
@@ -340,7 +350,11 @@ function acSkuPricingReturn() {
     if (g.orderProfit < 0) {
       cause = 'PRICING'; // negative before returns
       oneOff = acOneOffCheck(g, norms);
-      if (oneOff) cause = 'ONEOFF'; // …but only because of one-off event day(s)
+      // Events explain the WHOLE loss → ONEOFF. Events present but the SKU
+      // still loses at normal margins → stays PRICING, and the events are kept
+      // so the row shows "excl. events" and the reprice suggestion can be
+      // based on normal days only.
+      if (oneOff && oneOff.adjProfit >= 0) cause = 'ONEOFF';
     }
     else if (g.netProfit < 0)   cause = 'RETURN';  // returns sink an otherwise-profitable SKU
     else return;
@@ -361,6 +375,9 @@ function acSkuPricingReturn() {
       unitCost: g.unitCost, returnRate,
       events: oneOff ? oneOff.events : undefined,
       adjProfit: oneOff ? oneOff.adjProfit : undefined,
+      exSales: oneOff ? oneOff.exSales : undefined,
+      exQty: oneOff ? oneOff.exQty : undefined,
+      exProfit: oneOff ? oneOff.exProfit : undefined,
     });
   });
   return out;
@@ -594,13 +611,15 @@ function acSkuTr(i) {
   // Profit cell: net (realised, larger) over order (pre-return). Coupon rows have
   // only one profit + a coupon attribution line. One-off rows add the "what it
   // would be at normal margins" line.
-  const oneOffLine = i.cause === 'ONEOFF'
-    ? `<div class="ac-explain" style="color:#14b8a6;">excl. events ${fmt(i.adjProfit)}</div>` : '';
+  // Any row with event days (ONEOFF, or PRICING that still loses at normal
+  // margins) shows what the window profit would be without them.
+  const oneOffLine = i.events && i.events.length
+    ? `<div class="ac-explain" style="color:${i.adjProfit < 0 ? '#ef4444' : '#14b8a6'};">excl. events ${fmt(i.adjProfit)}</div>` : '';
   const profitCell = coupon
     ? `<td class="num"><b class="ac-loss">${fmt(i.profit)}</b><div class="ac-explain">pre-coupon ${fmt(i.preFreeProfit)} · coupon ${fmt(i.couponFee)}</div></td>`
     : `<td class="num">${acKV('net', `<b style="color:${acColor(i.netProfit)};font-size:15px;">${fmt(i.netProfit)}</b>`)}${acKV('order', `<b style="color:${acColor(i.orderProfit)};">${fmt(i.orderProfit)}</b>`)}${oneOffLine}</td>`;
 
-  const badgeTip = i.cause === 'ONEOFF' ? ` title="${acOneOffTip(i)}"` : '';
+  const badgeTip = i.events && i.events.length ? ` title="${acOneOffTip(i)}"` : '';
   return `<tr>
     <td style="text-align:left;"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}"${badgeTip}>${AC.CAUSE_LABEL[i.cause] || i.cause}</span></td>
     <td style="text-align:left;"><span class="ac-skubig">${i.sku || '—'}</span></td>
@@ -682,11 +701,14 @@ function acCurrentPrice(i) {
 // price (same naive back-out the suggestion uses — fee drift ignored).
 // Suggested price solves  perUnit + (P − avgPrice) = targetRate × P  so the
 // per-unit profit lands on the benchmark rate at the new price.
+// When the row has event days (dispute / oversized discount), the basis is the
+// NORMAL days only — otherwise the event would inflate the suggested price.
 function acRepriceState(i) {
-  const qty = i.orderQty || 0;
+  const stripped = i.events && i.events.length && i.exQty > 0;
+  const qty = (stripped ? i.exQty : i.orderQty) || 0;
   if (!qty) return null;
-  const avgPrice = i.orderSales / qty;
-  const perUnit  = i.orderProfit / qty;
+  const avgPrice = (stripped ? i.exSales : i.orderSales) / qty;
+  const perUnit  = (stripped ? i.exProfit : i.orderProfit) / qty;
   const bench = acTargetRate(i.platform, avgPrice);
   const rate  = bench && bench.rate > 0 ? Math.min(bench.rate, AC_REPRICE.MAX_RATE) : null;
   let suggested;
@@ -700,7 +722,7 @@ function acRepriceState(i) {
   const cur = acCurrentPrice(i);
   const estNow = cur == null ? null : perUnit + (cur - avgPrice);
   return { avgPrice, perUnit, suggested, cur, estNow, repriced: estNow != null && estNow > 0,
-           targetRate: rate, targetSrc: bench ? bench.src : null };
+           targetRate: rate, targetSrc: bench ? bench.src : null, stripped };
 }
 
 // Reprice control — Amazon & Shopify PRICING SKU rows. The button opens a
@@ -730,9 +752,10 @@ function acRepriceCell(i) {
   const tgt = st.targetRate
     ? `target ${(st.targetRate * 100).toFixed(0)}%`
     : 'target $2/u';
-  const tip = st.targetRate
+  const strippedNote = st.stripped ? ` · based on normal days only (excl. ${i.events.length} event day${i.events.length > 1 ? 's' : ''})` : '';
+  const tip = (st.targetRate
     ? `$${suggested} → ~${(st.targetRate * 100).toFixed(0)}% profit/unit (median of profitable ${i.platform} SKUs, ${st.targetSrc})`
-    : `$${suggested} → ~$2 profit/unit (no benchmark available)`;
+    : `$${suggested} → ~$2 profit/unit (no benchmark available)`) + strippedNote;
   const subLine = `<div class="ac-rst-sub">${tgt}${st.cur != null ? ` · now $${st.cur.toFixed(2)}` : ''}</div>`;
   return `<td class="num"><button onclick="acRepriceOpen('${encodeURIComponent(i.sku)}',${suggested},'${plat}',this)" title="${tip}"
       style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:#2563eb;color:#fff;cursor:pointer;white-space:nowrap;">$${suggested} ▾</button>${subLine}</td>`;
