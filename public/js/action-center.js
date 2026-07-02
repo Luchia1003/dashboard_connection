@@ -15,17 +15,90 @@
 // hook.
 
 const AC = {
-  CAUSE_PRIORITY: { PRICING: 3, DROPSHIP: 2, COUPON: 2, RETURN: 1 },
-  CAUSE_CLASS:    { PRICING: 'ac-pricing', DROPSHIP: 'ac-dropship', COUPON: 'ac-coupon', RETURN: 'ac-return' },
+  CAUSE_PRIORITY: { PRICING: 3, DROPSHIP: 2, COUPON: 2, RETURN: 1, ONEOFF: 0.5 },
+  CAUSE_CLASS:    { PRICING: 'ac-pricing', DROPSHIP: 'ac-dropship', COUPON: 'ac-coupon', RETURN: 'ac-return', ONEOFF: 'ac-oneoff' },
+  CAUSE_LABEL:    { ONEOFF: 'ONE-OFF' },
   CAUSE_SUGGEST: {
     PRICING:  'Already negative before returns & fees → raise price / cut product',
     DROPSHIP: 'Dropship fee turned it negative → switch supplier / adjust price',
     COUPON:   'Coupon turned it negative → pause / adjust coupon',
     RETURN:   'Profitable before returns; returns sink it → check quality / listing / return reason',
+    ONEOFF:   'Profitable at normal margins — the loss came from one-off event(s) (dispute / oversized discount / abnormal fee). No repricing needed.',
   },
 };
 
 function acNum(v) { return Number(v) || 0; }
+
+// ── One-off event detection ───────────────────────────────────────────────────
+// A PRICING loss only deserves repricing if the SKU loses money at its NORMAL
+// margin. Disputes / oversized discounts / abnormal fees instead show up as
+// days whose margin RATE collapses far below the SKU's normal rate (a real
+// pricing problem keeps a normal rate — the margin just doesn't cover cost).
+// If restoring those collapsed days to the normal rate turns the window profit
+// positive, the SKU is fine → tag ONEOFF instead of PRICING.
+
+const AC_ONEOFF = {
+  RATE_FACTOR: 0.5,    // day is anomalous when margin rate < 50% of normal…
+  MIN_SHORTFALL: 25,   // …and the dollar shortfall vs normal is ≥ $25
+  MIN_SKU_DAYS: 3,     // per-SKU norm needs ≥3 profitable days, else platform norm
+};
+
+function acMedian(a) {
+  if (!a.length) return null;
+  const s = [...a].sort((x, y) => x - y);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+// Median ORDER margin rate over profitable days — per platform and per
+// platform|SKU — across ALL history (not just the selected window), so a SKU
+// is judged against its own long-run normal wherever it has one.
+function acMarginNorms() {
+  if (S._acNorms && S._acNormsFor === S.sku) return S._acNorms;
+  const plat = new Map(), sku = new Map();
+  (S.sku || []).forEach(r => {
+    const sls = acNum(r.ORDER_PRODUCT_SALES);
+    if (!(sls > 0) || !(acNum(r.ORDER_PROFIT) > 0)) return;
+    const rate = acNum(r.ORDER_MARGIN) / sls;
+    const p = r.PLATFORM || '';
+    if (!plat.has(p)) plat.set(p, []);
+    plat.get(p).push(rate);
+    const k = `${p}|${r.SALES_SKU || 'UNKNOWN'}`;
+    if (!sku.has(k)) sku.set(k, []);
+    sku.get(k).push(rate);
+  });
+  const platRate = new Map(), skuRate = new Map();
+  plat.forEach((v, k) => platRate.set(k, acMedian(v)));
+  sku.forEach((v, k) => { if (v.length >= AC_ONEOFF.MIN_SKU_DAYS) skuRate.set(k, acMedian(v)); });
+  S._acNorms = { platRate, skuRate };
+  S._acNormsFor = S.sku;
+  return S._acNorms;
+}
+
+// Returns { events, adjProfit, normRate } when the group's loss is explained by
+// one-off events, else null.
+function acOneOffCheck(g, norms) {
+  const norm = norms.skuRate.get(`${g.platform}|${g.sku}`) ?? norms.platRate.get(g.platform);
+  if (!(norm > 0)) return null;
+  const events = [];
+  let adj = 0;
+  (g.days || []).forEach(d => {
+    if (!(d.sls > 0)) return;
+    const shortfall = norm * d.sls - d.mg;
+    if (d.mg / d.sls < norm * AC_ONEOFF.RATE_FACTOR && shortfall >= AC_ONEOFF.MIN_SHORTFALL) {
+      events.push({ date: d.date, mg: d.mg, exp: norm * d.sls });
+      adj += shortfall;
+    }
+  });
+  if (!events.length) return null;
+  const adjProfit = g.orderProfit + adj;
+  return adjProfit >= 0 ? { events, adjProfit, normRate: norm } : null;
+}
+
+function acOneOffTip(i) {
+  const days = (i.events || []).map(e => `${e.date}: margin ${fmt(e.mg)} vs normal ~${fmt(e.exp)}`).join(' · ');
+  return `${days} → excl. these events ${fmt(i.adjProfit)}`;
+}
 
 // (Re)build the shared inventory + restock lookups from S (spec §1 / §3.2).
 function acBuildInvIndexes() {
@@ -177,9 +250,11 @@ function acSkuPricingReturn() {
     if (!g) {
       g = { sku, platform, orderProfit: 0, netProfit: 0,
             orderSales: 0, netSales: 0, orderMargin: 0, netMargin: 0,
-            orderQty: 0, netQty: 0, refundQty: 0, unitCost: 0 };
+            orderQty: 0, netQty: 0, refundQty: 0, unitCost: 0, days: [] };
       groups.set(k, g);
     }
+    g.days.push({ date: String(r.DATE || '').slice(0, 10),
+                  sls: acNum(r.ORDER_PRODUCT_SALES), mg: acNum(r.ORDER_MARGIN) });
     g.orderProfit += acNum(r.ORDER_PROFIT);
     g.netProfit   += acNum(r.NET_PROFIT);
     g.orderSales  += acNum(r.ORDER_PRODUCT_SALES);
@@ -193,9 +268,14 @@ function acSkuPricingReturn() {
   });
 
   const out = [];
+  const norms = acMarginNorms();
   groups.forEach(g => {
-    let cause;
-    if (g.orderProfit < 0)      cause = 'PRICING'; // negative before returns
+    let cause, oneOff = null;
+    if (g.orderProfit < 0) {
+      cause = 'PRICING'; // negative before returns
+      oneOff = acOneOffCheck(g, norms);
+      if (oneOff) cause = 'ONEOFF'; // …but only because of one-off event day(s)
+    }
     else if (g.netProfit < 0)   cause = 'RETURN';  // returns sink an otherwise-profitable SKU
     else return;
 
@@ -207,12 +287,14 @@ function acSkuPricingReturn() {
       level: 'sku', cause, skuKind: 'pr',
       sku: g.sku, platform: g.platform,
       // headline value used for sorting = the cause-driving profit
-      profit: cause === 'PRICING' ? g.orderProfit : g.netProfit,
+      profit: cause === 'RETURN' ? g.netProfit : g.orderProfit,
       orderProfit: g.orderProfit, netProfit: g.netProfit,
       orderSales: g.orderSales, netSales: g.netSales,
       orderMargin: g.orderMargin, netMargin: g.netMargin,
       orderQty: g.orderQty, netQty: g.netQty,
       unitCost: g.unitCost, returnRate,
+      events: oneOff ? oneOff.events : undefined,
+      adjProfit: oneOff ? oneOff.adjProfit : undefined,
     });
   });
   return out;
@@ -286,7 +368,8 @@ const AC_ORDER_COLS = ['CAUSE', 'ORDER_ID', 'SKU', 'PLATFORM', 'ORDER_DATE', 'QT
 const AC_SKU_COLS = ['CAUSE', 'SKU', 'PLATFORM', 'ORDER_PROFIT', 'NET_PROFIT',
   'ORDER_PRODUCT_SALES', 'NET_PRODUCT_SALES', 'ORDER_MARGIN', 'NET_MARGIN',
   'ORDER_QTY', 'NET_QTY', 'UNIT_COST', 'RETURN_RATE', 'COUPON_FEE',
-  'PRE_COUPON_PROFIT', 'PROFIT', 'CURRENT_PRICE', 'REPRICED'];
+  'PRE_COUPON_PROFIT', 'PROFIT', 'CURRENT_PRICE', 'REPRICED',
+  'ONE_OFF_EVENT_DAYS', 'PROFIT_EXCL_EVENTS'];
 
 const acRound = v => (v == null ? '' : Math.round(Number(v) * 100) / 100);
 
@@ -325,6 +408,8 @@ function acSkuCsvRow(i) {
     COUPON_FEE: '', PRE_COUPON_PROFIT: '', PROFIT: acRound(i.profit),
     CURRENT_PRICE: st && st.cur != null ? acRound(st.cur) : '',
     REPRICED: st && st.repriced ? 'YES' : '',
+    ONE_OFF_EVENT_DAYS: i.events ? i.events.map(e => e.date).join(' ') : '',
+    PROFIT_EXCL_EVENTS: i.adjProfit != null ? acRound(i.adjProfit) : '',
   };
 }
 
@@ -441,13 +526,17 @@ function acSkuTr(i) {
     : `<td class="num">${acDash}</td>`;
 
   // Profit cell: net (realised, larger) over order (pre-return). Coupon rows have
-  // only one profit + a coupon attribution line.
+  // only one profit + a coupon attribution line. One-off rows add the "what it
+  // would be at normal margins" line.
+  const oneOffLine = i.cause === 'ONEOFF'
+    ? `<div class="ac-explain" style="color:#14b8a6;">excl. events ${fmt(i.adjProfit)}</div>` : '';
   const profitCell = coupon
     ? `<td class="num"><b class="ac-loss">${fmt(i.profit)}</b><div class="ac-explain">pre-coupon ${fmt(i.preFreeProfit)} · coupon ${fmt(i.couponFee)}</div></td>`
-    : `<td class="num">${acKV('net', `<b style="color:${acColor(i.netProfit)};font-size:15px;">${fmt(i.netProfit)}</b>`)}${acKV('order', `<b style="color:${acColor(i.orderProfit)};">${fmt(i.orderProfit)}</b>`)}</td>`;
+    : `<td class="num">${acKV('net', `<b style="color:${acColor(i.netProfit)};font-size:15px;">${fmt(i.netProfit)}</b>`)}${acKV('order', `<b style="color:${acColor(i.orderProfit)};">${fmt(i.orderProfit)}</b>`)}${oneOffLine}</td>`;
 
+  const badgeTip = i.cause === 'ONEOFF' ? ` title="${acOneOffTip(i)}"` : '';
   return `<tr>
-    <td style="text-align:left;"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></td>
+    <td style="text-align:left;"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}"${badgeTip}>${AC.CAUSE_LABEL[i.cause] || i.cause}</span></td>
     <td style="text-align:left;"><span class="ac-skubig">${i.sku || '—'}</span></td>
     <td style="text-align:left;">${acPlatPill(i.platform) || acDash}</td>
     ${invCell}
@@ -545,6 +634,11 @@ function acRepriceState(i) {
 // (still clickable to adjust) instead of a suggestion.
 function acRepriceCell(i) {
   const plat = String(i.platform || '').toLowerCase();
+  if (i.cause === 'ONEOFF') {
+    const n = (i.events || []).length;
+    return `<td class="num"><div style="font-size:11px;font-weight:700;color:#14b8a6;white-space:nowrap;" title="${acOneOffTip(i)}">✓ no reprice</div>
+      <div class="ac-rst-sub">${n} one-off day${n > 1 ? 's' : ''} · excl. ${fmt(i.adjProfit)}</div></td>`;
+  }
   if (i.skuKind === 'coupon' || !(plat === 'amazon' || plat === 'shopify') || i.cause !== 'PRICING' || !(i.orderQty > 0)) return `<td class="num">${acDash}</td>`;
   const st = acRepriceState(i);
   const suggested = st.suggested.toFixed(2);
@@ -653,7 +747,7 @@ function acCauseChips(counts, causeOrder, active) {
   return causeOrder.filter(c => counts[c]).map(c => {
     const cls = active === c ? 'ac-cchip active' : (active ? 'ac-cchip dim' : 'ac-cchip');
     return `<button class="${cls}" onclick="acToggleCause('${c}')" title="${AC.CAUSE_SUGGEST[c]}">
-        <span class="ac-cause-badge ${AC.CAUSE_CLASS[c]}">${c}</span><b>${counts[c]}</b>
+        <span class="ac-cause-badge ${AC.CAUSE_CLASS[c]}">${AC.CAUSE_LABEL[c] || c}</span><b>${counts[c]}</b>
       </button>`;
   }).join('');
 }
@@ -701,7 +795,7 @@ function renderActionCenterPage() {
   const level    = S.acLevel || 'order';
   const fullList = level === 'order' ? orderInsights : skuInsights;
   const counts   = acCauseCounts(fullList);
-  const causeOrder = level === 'order' ? ['PRICING', 'DROPSHIP', 'COUPON'] : ['PRICING', 'RETURN', 'COUPON'];
+  const causeOrder = level === 'order' ? ['PRICING', 'DROPSHIP', 'COUPON'] : ['PRICING', 'RETURN', 'COUPON', 'ONEOFF'];
 
   S._acRestockList = acBuildRestockList();
   acSyncLevelToggle(orderInsights.length, skuInsights.length, level);
