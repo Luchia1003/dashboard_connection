@@ -100,6 +100,72 @@ function acOneOffTip(i) {
   return `${days} → excl. these events ${fmt(i.adjProfit)}`;
 }
 
+// ── Reprice target: benchmark profit rate ─────────────────────────────────────
+// The suggested price targets the profit RATE that similar profitable products
+// achieve — the median all-time order-profit rate of profitable SKUs on the
+// same platform in the same price band — instead of a flat $2/unit (too high
+// for cheap items, too low for expensive ones). Falls back to the platform-wide
+// median when a band is thin, then to the legacy $2 flat with no benchmark.
+
+const AC_REPRICE = {
+  BANDS: [10, 25, 50, 100, 200], // price band upper edges; last band open-ended
+  MIN_BAND_SKUS: 5,              // band median needs ≥5 profitable SKUs
+  MAX_RATE: 0.5,                 // cap the target rate
+  MIN_PROFIT: 0.5,               // never suggest below $0.50/unit profit
+};
+
+function acBandOf(p) {
+  for (let i = 0; i < AC_REPRICE.BANDS.length; i++) if (p < AC_REPRICE.BANDS[i]) return i;
+  return AC_REPRICE.BANDS.length;
+}
+function acBandLabel(b) {
+  const lo = b ? AC_REPRICE.BANDS[b - 1] : 0;
+  const hi = AC_REPRICE.BANDS[b];
+  return hi ? `$${lo}–$${hi}` : `$${lo}+`;
+}
+
+// All-time per-SKU aggregation → median profit rate per platform × price band
+// (profitable SKUs only), plus a platform-wide median as fallback.
+function acProfitRateBenchmarks() {
+  if (S._acBench && S._acBenchFor === S.sku) return S._acBench;
+  const agg = new Map();
+  (S.sku || []).forEach(r => {
+    const k = `${r.PLATFORM || ''}|${r.SALES_SKU || ''}`;
+    let a = agg.get(k);
+    if (!a) { a = { platform: r.PLATFORM || '', sales: 0, profit: 0, qty: 0 }; agg.set(k, a); }
+    a.sales  += acNum(r.ORDER_PRODUCT_SALES);
+    a.profit += acNum(r.ORDER_PROFIT);
+    a.qty    += acNum(r.ORDER_QUANTITY);
+  });
+  const bands = new Map(), plat = new Map();
+  agg.forEach(a => {
+    if (!(a.sales > 0) || !(a.profit > 0) || !(a.qty > 0)) return;
+    const rate = a.profit / a.sales;
+    const bk = `${a.platform}|${acBandOf(a.sales / a.qty)}`;
+    if (!bands.has(bk)) bands.set(bk, []);
+    bands.get(bk).push(rate);
+    if (!plat.has(a.platform)) plat.set(a.platform, []);
+    plat.get(a.platform).push(rate);
+  });
+  const bandRate = new Map(), bandN = new Map(), platRate = new Map();
+  bands.forEach((v, k) => { bandRate.set(k, acMedian(v)); bandN.set(k, v.length); });
+  plat.forEach((v, k) => platRate.set(k, acMedian(v)));
+  S._acBench = { bandRate, bandN, platRate };
+  S._acBenchFor = S.sku;
+  return S._acBench;
+}
+
+function acTargetRate(platform, avgPrice) {
+  const b = acProfitRateBenchmarks();
+  const band = acBandOf(avgPrice);
+  const bk = `${platform}|${band}`;
+  if ((b.bandN.get(bk) || 0) >= AC_REPRICE.MIN_BAND_SKUS)
+    return { rate: b.bandRate.get(bk), src: `${acBandLabel(band)} band` };
+  const pr = b.platRate.get(platform);
+  if (pr != null) return { rate: pr, src: 'platform median' };
+  return null;
+}
+
 // (Re)build the shared inventory + restock lookups from S (spec §1 / §3.2).
 function acBuildInvIndexes() {
   if (typeof buildInventoryIndex === 'function' && Array.isArray(S.inventoryPool))     buildInventoryIndex();
@@ -614,21 +680,34 @@ function acCurrentPrice(i) {
 
 // Estimated per-unit profit if the window's orders had sold at the current
 // price (same naive back-out the suggestion uses — fee drift ignored).
+// Suggested price solves  perUnit + (P − avgPrice) = targetRate × P  so the
+// per-unit profit lands on the benchmark rate at the new price.
 function acRepriceState(i) {
   const qty = i.orderQty || 0;
   if (!qty) return null;
   const avgPrice = i.orderSales / qty;
   const perUnit  = i.orderProfit / qty;
-  const suggested = Math.max(0.01, avgPrice + (2 - perUnit));
+  const bench = acTargetRate(i.platform, avgPrice);
+  const rate  = bench && bench.rate > 0 ? Math.min(bench.rate, AC_REPRICE.MAX_RATE) : null;
+  let suggested;
+  if (rate) {
+    suggested = (avgPrice - perUnit) / (1 - rate);
+    if (rate * suggested < AC_REPRICE.MIN_PROFIT) suggested = avgPrice + (AC_REPRICE.MIN_PROFIT - perUnit);
+  } else {
+    suggested = avgPrice + (2 - perUnit); // legacy flat $2 — no benchmark available
+  }
+  suggested = Math.max(0.01, suggested);
   const cur = acCurrentPrice(i);
   const estNow = cur == null ? null : perUnit + (cur - avgPrice);
-  return { avgPrice, perUnit, suggested, cur, estNow, repriced: estNow != null && estNow > 0 };
+  return { avgPrice, perUnit, suggested, cur, estNow, repriced: estNow != null && estNow > 0,
+           targetRate: rate, targetSrc: bench ? bench.src : null };
 }
 
 // Reprice control — Amazon & Shopify PRICING SKU rows. The button opens a
-// dropdown of the SKU's listing(s) with current price; suggested price is a
-// simple back-out to profit ≥ $2/unit from ORDER figures (fees already in):
-//   suggested = current_unit_price + ($2 − order_profit_per_unit)
+// dropdown of the SKU's listing(s) with current price; suggested price targets
+// the benchmark profit rate of similar profitable products (same platform +
+// price band — see acTargetRate), backed out from ORDER figures (fees already
+// in, fee drift with price ignored).
 // Amazon → Informed manual price (all US variants); Shopify → the variant price.
 // Rows whose CURRENT price already yields positive profit show ✓ REPRICED
 // (still clickable to adjust) instead of a suggestion.
@@ -648,9 +727,15 @@ function acRepriceCell(i) {
         style="padding:4px 10px;border:1px solid rgba(22,163,74,.45);border-radius:6px;font-size:12px;font-weight:700;background:rgba(22,163,74,.12);color:#16a34a;cursor:pointer;white-space:nowrap;">✓ $${st.cur.toFixed(2)}</button>
       <div class="ac-rst-sub" style="color:#16a34a;">repriced · ~${fmt(st.estNow)}/u</div></td>`;
   }
-  const nowLine = st.cur != null ? `<div class="ac-rst-sub">now $${st.cur.toFixed(2)}</div>` : '';
-  return `<td class="num"><button onclick="acRepriceOpen('${encodeURIComponent(i.sku)}',${suggested},'${plat}',this)"
-      style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:#2563eb;color:#fff;cursor:pointer;white-space:nowrap;">$${suggested} ▾</button>${nowLine}</td>`;
+  const tgt = st.targetRate
+    ? `target ${(st.targetRate * 100).toFixed(0)}%`
+    : 'target $2/u';
+  const tip = st.targetRate
+    ? `$${suggested} → ~${(st.targetRate * 100).toFixed(0)}% profit/unit (median of profitable ${i.platform} SKUs, ${st.targetSrc})`
+    : `$${suggested} → ~$2 profit/unit (no benchmark available)`;
+  const subLine = `<div class="ac-rst-sub">${tgt}${st.cur != null ? ` · now $${st.cur.toFixed(2)}` : ''}</div>`;
+  return `<td class="num"><button onclick="acRepriceOpen('${encodeURIComponent(i.sku)}',${suggested},'${plat}',this)" title="${tip}"
+      style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:#2563eb;color:#fff;cursor:pointer;white-space:nowrap;">$${suggested} ▾</button>${subLine}</td>`;
 }
 
 const acMoney = v => v == null ? '—' : '$' + Number(v).toFixed(2);
