@@ -1067,10 +1067,17 @@ function acRenderInvPage() {
   const rows = S.invRecon || [];
   const first = rows[0] || {};
   const snapDate = String(first.RUN_DATE || '').slice(0, 10);
-  const genAt    = String(first.GENERATED_AT || '').slice(0, 16).replace('T', ' ');
+  // GENERATED_AT is stored in UTC — show it in Pacific for readability.
+  const genAt = (() => {
+    const m = String(first.GENERATED_AT || '').match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+    if (!m) return '';
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
+    return d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles',
+      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' PT';
+  })();
   const meta = rows.length
-    ? `Amazon listing snapshot ${snapDate || '—'}${genAt ? ` · generated ${genAt} UTC` : ''}`
-    : 'No reconciliation data yet — the daily job runs ~10:30 UTC';
+    ? `Amazon listing snapshot ${snapDate || '—'}${genAt ? ` · generated ${genAt}` : ''}`
+    : 'No reconciliation data yet — the daily job runs each morning (~7:30 AM PT)';
 
   const dlIcon = '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>';
   const ctrl = 'padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg);color:var(--text);';
