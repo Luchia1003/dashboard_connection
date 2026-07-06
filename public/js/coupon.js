@@ -49,6 +49,13 @@ function cpDsBadge(r) {
     background:rgba(168,85,247,.15);color:#a855f7;border:1px solid rgba(168,85,247,.3);">DS</span>`;
 }
 
+// Informational fee cell (margin is already net of these fees) — dash when 0.
+function cpFeeCell(v) {
+  const n = Number(v) || 0;
+  if (!n) return `<td style="text-align:right;"><span style="color:var(--text3);">—</span></td>`;
+  return `<td style="text-align:right;"><span style="${CP_V}color:var(--text2);">${fmt(n)}</span></td>`;
+}
+
 function cpRefundCells(r) {
   const rq = Number(r.REFUND_QTY) || 0;
   const rs = Number(r.REFUND_PRODUCT_SALES) || 0;
@@ -70,7 +77,7 @@ async function loadCouponData() {
 
   document.getElementById('couponHead').innerHTML = '';
   document.getElementById('couponBody').innerHTML =
-    `<tr><td colspan="14" style="text-align:center;padding:48px;color:var(--text3);">
+    `<tr><td colspan="16" style="text-align:center;padding:48px;color:var(--text3);">
        <div style="display:inline-block;width:28px;height:28px;border:2px solid var(--border);border-top-color:#0ea5e9;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px;"></div>
        <div>Loading coupon data…</div>
      </td></tr>`;
@@ -91,7 +98,7 @@ async function loadCouponData() {
     renderCouponPage();
   } catch (err) {
     document.getElementById('couponBody').innerHTML =
-      `<tr><td colspan="14" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
+      `<tr><td colspan="16" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
   }
 }
 window.loadCouponData = loadCouponData;
@@ -141,6 +148,8 @@ function renderCouponSkuTable() {
       <th style="min-width:115px;">Product Sales</th>
       <th style="min-width:110px;">Margin</th>
       <th style="min-width:105px;">Coupon Fee</th>
+      <th style="min-width:100px;">Shipping Fee</th>
+      <th style="min-width:100px;">Dropship Fee</th>
       <th style="min-width:110px;">New Margin</th>
       <th style="min-width:105px;">Profit</th>
       <th style="min-width:90px;">Refund Qty</th>
@@ -176,7 +185,7 @@ function renderCouponSkuTable() {
 
   const tbody = document.getElementById('couponBody');
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--text3);">${query ? `No SKUs matching "${searchRaw}"` : 'No data for selected period'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="16" style="text-align:center;padding:40px;color:var(--text3);">${query ? `No SKUs matching "${searchRaw}"` : 'No data for selected period'}</td></tr>`;
     return;
   }
 
@@ -197,6 +206,8 @@ function renderCouponSkuTable() {
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmt(Number(r.ORDER_PRODUCT_SALES) || 0)}</span></td>
       <td style="text-align:right;"><span style="${V}color:${margin < 0 ? '#ef4444' : 'var(--text)'};">${fmt(margin)}</span></td>
       <td style="text-align:right;"><span style="${V}color:#f59e0b;">${fmt(couponFee)}</span></td>
+      ${cpFeeCell(r.ORDER_SHIPPING_FEE)}
+      ${cpFeeCell(r.ORDER_DROPSHIP_FEE)}
       <td style="text-align:right;"><span style="${V}color:${newMargin < 0 ? '#ef4444' : '#10b981'};">${fmt(newMargin)}</span></td>
       <td style="text-align:right;"><span style="${V}color:${profit < 0 ? '#ef4444' : '#10b981'};">${fmt(profit)}</span></td>
       ${cpRefundCells(r)}
@@ -231,6 +242,8 @@ function renderCouponOrderTable() {
       <th style="min-width:115px;">Product Sales</th>
       <th style="min-width:110px;">Margin</th>
       <th style="min-width:105px;">Coupon Fee</th>
+      <th style="min-width:100px;">Shipping Fee</th>
+      <th style="min-width:100px;">Dropship Fee</th>
       <th style="min-width:110px;">New Margin</th>
       <th style="min-width:105px;">Profit</th>
       <th style="min-width:90px;">Refund Qty</th>
@@ -267,7 +280,7 @@ function renderCouponOrderTable() {
 
   const tbody = document.getElementById('couponBody');
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--text3);">${query ? `No orders matching "${searchRaw}"` : 'No data for selected period'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="16" style="text-align:center;padding:40px;color:var(--text3);">${query ? `No orders matching "${searchRaw}"` : 'No data for selected period'}</td></tr>`;
     return;
   }
 
@@ -287,6 +300,8 @@ function renderCouponOrderTable() {
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmt(Number(r.ORDER_PRODUCT_SALES) || 0)}</span></td>
       <td style="text-align:right;"><span style="${V}color:${margin < 0 ? '#ef4444' : 'var(--text)'};">${fmt(margin)}</span></td>
       <td style="text-align:right;"><span style="${V}color:#f59e0b;">${fmt(Number(r.ORDER_COUPON_FEE) || 0)}</span></td>
+      ${cpFeeCell(r.ORDER_SHIPPING_FEE)}
+      ${cpFeeCell(r.ORDER_DROPSHIP_FEE)}
       <td style="text-align:right;"><span style="${V}color:${newMargin < 0 ? '#ef4444' : '#10b981'};">${fmt(newMargin)}</span></td>
       <td style="text-align:right;"><span style="${V}color:${profit < 0 ? '#ef4444' : '#10b981'};">${fmt(profit)}</span></td>
       ${cpRefundCells(r)}
