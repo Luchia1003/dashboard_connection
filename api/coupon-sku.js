@@ -35,7 +35,9 @@ module.exports = async function handler(req, res) {
     await new Promise((resolve, reject) => conn.connect(err => err ? reject(err) : resolve()));
     const rows = await new Promise((resolve, reject) => {
       conn.execute({
-        sqlText: `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.DAILY_SKU_COUPON_PROFIT ORDER BY ORDER_DATE ASC`,
+        // ?window=prev -> previous full month; default -> month-to-date.
+        // Whitelist mapping (never interpolate user input into SQL).
+        sqlText: `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.${req.query && req.query.window === 'prev' ? 'PREV_MONTH_SKU_COUPON_PROFIT' : 'DAILY_SKU_COUPON_PROFIT'} ORDER BY ORDER_DATE ASC`,
         complete: (err, stmt, rows) => err ? reject(err) : resolve(rows),
       });
     });

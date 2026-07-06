@@ -190,8 +190,8 @@ async function downloadCouponPrevMonthCSV() {
     if (!S.couponSkuPrev || !S.couponOrderPrev) {
       if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
       const [sr, or_] = await Promise.all([
-        fetch('/api/coupon-sku-prev'),
-        fetch('/api/coupon-order-prev'),
+        fetch('/api/coupon-sku?window=prev'),
+        fetch('/api/coupon-order?window=prev'),
       ]);
       if (sr.status === 401 || or_.status === 401) { window.location.href = '/login.html'; return; }
       if (!sr.ok)  throw new Error(`Coupon SKU prev API: HTTP ${sr.status}`);
