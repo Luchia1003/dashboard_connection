@@ -788,12 +788,18 @@
           </div>
         </div>
 
-        <!-- Right cluster: context-aware CSV download -->
+        <!-- Right cluster: context-aware CSV downloads (this month + last full month) -->
         <div class="dl-wrap" style="margin-left:auto;">
-          <button id="couponDlBtn" class="dl-btn" onclick="downloadCouponCSV()" title="Download the currently selected coupon view (SKU level or Order level)">
-            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-            CSV
-          </button>
+          <div style="display:flex;gap:6px;">
+            <button id="couponDlBtn" class="dl-btn" onclick="downloadCouponCSV()" title="Download the currently selected coupon view (SKU level or Order level), month-to-date">
+              <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              CSV
+            </button>
+            <button id="couponPrevDlBtn" class="dl-btn" onclick="downloadCouponPrevMonthCSV()" title="Download the previous FULL month for the currently selected view (e.g. in July this downloads all of June)">
+              <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Last Month
+            </button>
+          </div>
           <span class="dl-hint" id="couponDlHint"></span>
         </div>
       </div>

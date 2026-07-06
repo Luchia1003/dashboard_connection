@@ -182,6 +182,38 @@ function downloadCouponCSV() {
   }
 }
 
+// Coupon Order → previous FULL month (e.g. in July this downloads all of June).
+// Served by PREV_MONTH_*_COUPON_PROFIT, rebuilt daily so late refunds keep landing.
+async function downloadCouponPrevMonthCSV() {
+  const btn = document.getElementById('couponPrevDlBtn');
+  try {
+    if (!S.couponSkuPrev || !S.couponOrderPrev) {
+      if (btn) { btn.disabled = true; btn.style.opacity = '.6'; }
+      const [sr, or_] = await Promise.all([
+        fetch('/api/coupon-sku-prev'),
+        fetch('/api/coupon-order-prev'),
+      ]);
+      if (sr.status === 401 || or_.status === 401) { window.location.href = '/login.html'; return; }
+      if (!sr.ok)  throw new Error(`Coupon SKU prev API: HTTP ${sr.status}`);
+      if (!or_.ok) throw new Error(`Coupon Order prev API: HTTP ${or_.status}`);
+      S.couponSkuPrev   = await sr.json();
+      S.couponOrderPrev = await or_.json();
+    }
+    const rows = (S.couponView || 'sku') === 'sku' ? S.couponSkuPrev : S.couponOrderPrev;
+    if (!rows || !rows.length) { alert('No coupon data for last month.'); return; }
+    const month = rows.reduce((m, r) => {
+      const d = String(r.ORDER_DATE || '').slice(0, 7);
+      return d > m ? d : m;
+    }, '');
+    const lvl = (S.couponView || 'sku') === 'sku' ? 'sku_level' : 'order_level';
+    downloadCSV(rows, `${lvl}_coupon_order_${month}_full_month.csv`);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+  }
+}
+
 // Inventory → Forecast matches Channel + Status; Slow Traffic matches Warehouse + Priority.
 function downloadInventoryCSV() {
   if (!S.inventoryForecast || !S.fbaAging) { loadInventoryData(); return; }
@@ -231,6 +263,7 @@ function downloadInventoryCSV() {
 window.downloadSkuCSV         = downloadSkuCSV;
 window.downloadOrderDetailCSV = downloadOrderDetailCSV;
 window.downloadCouponCSV      = downloadCouponCSV;
+window.downloadCouponPrevMonthCSV = downloadCouponPrevMonthCSV;
 window.downloadInventoryCSV   = downloadInventoryCSV;
 
 // ── Download hints ────────────────────────────────────────────────────────────
