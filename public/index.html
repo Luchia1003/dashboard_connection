@@ -734,7 +734,7 @@
         <div style="display:flex;align-items:center;gap:6px;">
           <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
           <select id="couponDateSel" class="ctrl-sel" style="min-width:110px;" onchange="setCouponDate(this.value)">
-            <option value="">All Dates</option>
+            <option value="">This Month</option>
           </select>
         </div>
         <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
@@ -751,6 +751,8 @@
             <option value="coupon_fee">Coupon Fee</option>
             <option value="new_margin">New Margin</option>
             <option value="margin">Margin</option>
+            <option value="refund_qty">Refund Qty</option>
+            <option value="net_profit">Net Profit</option>
           </select>
           <select id="couponSkuDir" class="ctrl-sel" onchange="renderCouponPage()">
             <option value="desc">Newest / High → Low</option>
@@ -773,6 +775,7 @@
             <option value="coupon_fee">Coupon Fee</option>
             <option value="qty">Quantity</option>
             <option value="sku">SKU</option>
+            <option value="net_profit">Net Profit</option>
           </select>
           <select id="couponOrdDir" class="ctrl-sel" onchange="renderCouponPage()">
             <option value="desc">Newest / High → Low</option>
@@ -801,7 +804,7 @@
           <table>
             <thead id="couponHead" style="position:sticky;top:0;z-index:10;background:var(--card);"></thead>
             <tbody id="couponBody">
-              <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text3);">Loading…</td></tr>
+              <tr><td colspan="14" style="text-align:center;padding:40px;color:var(--text3);">Loading…</td></tr>
             </tbody>
           </table>
         </div>
