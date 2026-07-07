@@ -241,8 +241,10 @@ window.loadActionCenterData = loadActionCenterData;
 
 // ── Compute: Order Level ──────────────────────────────────────────────────────
 
-// 2a. ORDER_LEVEL_PROFIT → PRICING / DROPSHIP. The table is a ~5-day rolling
-// window on the Snowflake side, so we just scan every loss-making row.
+// 2a. ORDER_LEVEL_PROFIT → PRICING / DROPSHIP. The table is a ~90-day rolling
+// window on the Snowflake side (widened from 5 days on 2026-07-07 so losses that
+// only appear once the weekly UPS invoice lands stay visible); we scan every
+// loss-making row. Order Detail still displays only the last 5 days of it.
 function acOrderPricingDropship() {
   const out = [];
   (S.orderDetail || []).forEach(r => {
@@ -918,7 +920,7 @@ function renderActionCenterPage() {
   if (level === 'sku') acEnsureCurrentPrices();
 
   const subtitle = level === 'order'
-    ? 'Recent orders · 5-day rolling (dropship) · last 3 days (coupon)'
+    ? 'Recent orders · 90-day rolling (dropship) · last 3 days (coupon)'
     : `Follows Product Detail Time Range · ${typeof trDisplay === 'function' ? trDisplay() : 'All time'} (coupon: last 3 days)`;
 
   const dlIcon = '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>';

@@ -1,5 +1,7 @@
 // ── Order Detail Page ─────────────────────────────────────────────────────────
 // Shows the last 5 calendar days (today-5 … today-1) from ORDER_LEVEL_PROFIT.
+// The underlying table holds ~90 days (for Action Center's loss board); this
+// page's window filter below is what keeps the display at 5 days.
 
 // Compute the allowed 5-day window: [today-5, today-1]
 function getOrderDetailWindow() {
