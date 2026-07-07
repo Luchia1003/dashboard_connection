@@ -247,9 +247,14 @@ window.loadActionCenterData = loadActionCenterData;
 // loss-making row. Order Detail still displays only the last 5 days of it.
 function acOrderPricingDropship() {
   const out = [];
+  const tr = (typeof computeRange === 'function') ? computeRange(S.tr, S.customFrom, S.customTo) : null;
   (S.orderDetail || []).forEach(r => {
     const profit = acNum(r.PROFIT);
     if (profit >= 0) return;
+    if (tr) {
+      const d = String(r.ORDER_DATE || '').slice(0, 10);
+      if (d < tr.f || d > tr.t) return;
+    }
 
     const qty         = acNum(r.QTY);
     const salesMargin = acNum(r.SALES_MARGIN);
@@ -286,9 +291,14 @@ function acOrderPricingDropship() {
 // coupon are PRICING and left for dedup to merge with the 2a hit.
 function acOrderCoupon() {
   const out = [];
+  const tr = (typeof computeRange === 'function') ? computeRange(S.tr, S.customFrom, S.customTo) : null;
   (S.couponOrder || []).forEach(r => {
     const profit = acNum(r.PROFIT);
     if (profit >= 0) return;
+    if (tr) {
+      const d = String(r.ORDER_DATE || '').slice(0, 10);
+      if (d < tr.f || d > tr.t) return;
+    }
 
     const qty         = acNum(r.QUANTITY);
     const salesMargin = acNum(r.SALES_MARGIN); // pre-coupon, pre-COGS in this table
@@ -920,7 +930,7 @@ function renderActionCenterPage() {
   if (level === 'sku') acEnsureCurrentPrices();
 
   const subtitle = level === 'order'
-    ? 'Recent orders · 90-day rolling (dropship) · last 3 days (coupon)'
+    ? `90-day rolling · Time Range: ${typeof trDisplay === 'function' ? trDisplay() : 'All time'} (coupon: last 3 days)`
     : `Follows Product Detail Time Range · ${typeof trDisplay === 'function' ? trDisplay() : 'All time'} (coupon: last 3 days)`;
 
   const dlIcon = '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>';
