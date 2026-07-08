@@ -377,7 +377,10 @@ function acSkuPricingReturn() {
     const returnRate = g.orderQty ? Math.abs(g.refundQty) / g.orderQty : null;
 
     out.push({
-      key: `sku:${g.platform}:${g.sku}`,
+      // Key SKU goes through cleanSkuKey so 3b (coupon, cleaned) can collide;
+      // SKU_SUMMARY's SALES_SKU is already server-cleaned, so this is a no-op
+      // except for edge suffix/casing residue. Display keeps g.sku as-is.
+      key: `sku:${g.platform}:${typeof cleanSkuKey === 'function' ? cleanSkuKey(g.sku) : g.sku}`,
       level: 'sku', cause, skuKind: 'pr',
       sku: g.sku, platform: g.platform,
       // headline value used for sorting = the cause-driving profit
@@ -423,7 +426,10 @@ function acSkuCoupon() {
   const out = [];
   groups.forEach(g => {
     if (g.profit >= 0) return;
-    const preCoupon = g.margin - g.unitCost * g.qty;
+    // Exact pre-coupon profit: ORDER_PROFIT = ORDER_MARGIN − COUPON_FEE − COGS,
+    // so profit + couponFee undoes the fee without needing a single unit cost
+    // (the table's grain is (date, SKU, UNIT_COST) — one SKU can carry several).
+    const preCoupon = g.profit + g.couponFee;
     if (preCoupon < 0) return; // PRICING — left for 3a
     out.push({
       key: `sku:Amazon:${g.sku}`, // same shape as 3a keys so dedup can merge
@@ -992,8 +998,9 @@ function acRenderBody() {
   const q = String(S.acSearch || '').trim().toLowerCase();
   if (q) list = list.filter(i => String(i.sku || '').toLowerCase().includes(q) || String(i.orderId || '').toLowerCase().includes(q));
 
-  const salesOf = i => level === 'order' ? (i.productSales || 0) : (i.orderSales || 0);
-  const qtyOf   = i => level === 'order' ? (i.qty || 0) : (i.orderQty || 0);
+  // SKU-level coupon rows carry productSales/qty instead of orderSales/orderQty.
+  const salesOf = i => level === 'order' ? (i.productSales || 0) : (i.orderSales ?? i.productSales ?? 0);
+  const qtyOf   = i => level === 'order' ? (i.qty || 0) : (i.orderQty ?? i.qty ?? 0);
   const cmp = {
     loss:     (a, b) => { const pa = AC.CAUSE_PRIORITY[a.cause] || 0, pb = AC.CAUSE_PRIORITY[b.cause] || 0; return pa !== pb ? pb - pa : a.profit - b.profit; },
     smallest: (a, b) => b.profit - a.profit,

@@ -172,14 +172,21 @@ function downloadOrderDetailCSV() {
   downloadCSV(rows, `order_detail_${platform}_${dateLabel}_${dsLabel}_${todayStamp()}.csv`);
 }
 
-// Coupon Order → no filters, filename reflects current view + today's date.
+// Coupon Order → mirrors the filters the user sees (date dropdown + search),
+// same contract as every other page's CSV. Filename reflects view + date filter.
 function downloadCouponCSV() {
   if (!S.couponSku || !S.couponOrder) { loadCouponData(); return; }
-  if ((S.couponView || 'sku') === 'sku') {
-    downloadCSV(S.couponSku,   `sku_level_coupon_order_${todayStamp()}.csv`);
-  } else {
-    downloadCSV(S.couponOrder, `order_level_coupon_order_${todayStamp()}.csv`);
-  }
+  const dateLabel = S.couponDate || 'mtd';
+  const isSku = (S.couponView || 'sku') === 'sku';
+  let rows = isSku
+    ? (typeof getCouponSkuFiltered === 'function' ? getCouponSkuFiltered() : S.couponSku)
+    : (typeof getCouponOrderFiltered === 'function' ? getCouponOrderFiltered() : S.couponOrder);
+  const searchEl = document.getElementById(isSku ? 'couponSkuSearch' : 'couponOrdSearch');
+  const q = String((searchEl || {}).value || '').trim().toLowerCase();
+  if (q) rows = rows.filter(r => String(r.SKU || '').toLowerCase().includes(q)
+    || (!isSku && String(r.ORDER_ID || '').toLowerCase().includes(q)));
+  if (!rows.length) { alert('No rows match the current coupon filters.'); return; }
+  downloadCSV(rows, `${isSku ? 'sku' : 'order'}_level_coupon_order_${dateLabel}_${todayStamp()}.csv`);
 }
 
 // Coupon Order → previous FULL month (e.g. in July this downloads all of June).
