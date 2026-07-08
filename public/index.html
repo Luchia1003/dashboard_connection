@@ -501,14 +501,14 @@
 
       <div class="charts-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-bottom:20px;">
         <div class="card" style="padding:20px;">
-          <h2 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:14px;">Order Quantity Trend <span style="font-size:11px;font-weight:400;color:var(--text3);">Monthly</span></h2>
+          <h2 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:14px;">Quantity Trend <span id="chart1Gran" style="font-size:11px;font-weight:400;color:var(--text3);">Daily</span></h2>
           <div style="position:relative;height:220px;">
             <canvas id="orderTrendChart"></canvas>
             <div id="skelChart1" class="skeleton" style="position:absolute;inset:0;"></div>
           </div>
         </div>
         <div class="card" style="padding:20px;">
-          <h2 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:14px;">Financials Over Time <span style="font-size:11px;font-weight:400;color:var(--text3);">Monthly</span></h2>
+          <h2 style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:14px;">Financials Over Time <span id="chart2Gran" style="font-size:11px;font-weight:400;color:var(--text3);">Daily</span></h2>
           <div style="position:relative;height:220px;">
             <canvas id="financialChart"></canvas>
             <div id="skelChart2" class="skeleton" style="position:absolute;inset:0;"></div>
@@ -628,8 +628,8 @@
                 <th style="text-align:left;min-width:220px;"># SKU / Product</th>
                 <th style="min-width:140px;">Revenue</th>
                 <th style="min-width:140px;">Profit</th>
-                <th style="min-width:120px;">Orders</th>
-                <th style="min-width:150px;" id="marginHeader">Margin</th>
+                <th style="min-width:120px;">Qty</th>
+                <th style="min-width:150px;" id="marginHeader">Margin <span style="font-size:10px;font-weight:400;color:var(--text3);white-space:nowrap;">(% = margin ÷ revenue)</span></th>
                 <th style="min-width:110px;" id="returnHeader">Return Rate</th>
                 <th style="min-width:120px;">Inventory</th>
               </tr>

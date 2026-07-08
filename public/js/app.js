@@ -45,6 +45,13 @@ function fmt(v, type = 'currency') {
 
 function sum(rows, f) { return rows.reduce((a, r) => a + (Number(r[f]) || 0), 0); }
 function avg(rows, f) { return rows.length ? sum(rows, f) / rows.length : 0; }
+// Escape a string for safe interpolation into HTML text or attribute values
+// (product names can contain " for inch sizes, plus & and <).
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+}
+window.escHtml = escHtml;
 function pdiff(cur, base) { return base ? (cur - base) / Math.abs(base) : null; }
 
 window.fmt = fmt; window.sum = sum; window.avg = avg; window.pdiff = pdiff;
@@ -361,11 +368,14 @@ function updateDownloadHints() {
     odH.innerHTML = HINT_PREFIX + hintParts([platformDisplay(), date, dsLabel]);
   }
 
-  // Coupon → SKU level / Order level
+  // Coupon → SKU level / Order level · date filter · search (mirrors the CSV)
   const cpH = document.getElementById('couponDlHint');
   if (cpH) {
     const view = (S.couponView === 'order') ? 'Order level' : 'SKU level';
-    cpH.innerHTML = HINT_PREFIX + hintParts([view]);
+    const date = S.couponDate || 'Month-to-date';
+    const sEl = document.getElementById(S.couponView === 'order' ? 'couponOrdSearch' : 'couponSkuSearch');
+    const q = String((sEl || {}).value || '').trim();
+    cpH.innerHTML = HINT_PREFIX + hintParts(q ? [view, date, `search: "${q}"`] : [view, date]);
   }
 
   // Inventory → either Forecast (channel · status) or Slow Traffic (warehouse · priority)
@@ -607,7 +617,11 @@ function applyTheme(t) {
 }
 function toggleTheme() {
   applyTheme(S.theme === 'dark' ? 'light' : 'dark');
-  if (S.daily) renderCharts(getDaily(), S.salesMode);
+  if (S.daily) {
+    renderCharts(getDaily(), S.salesMode);
+    // YoY chart bakes theme colors into its config too — recolor it as well.
+    if (typeof renderYoYChart === 'function') renderYoYChart(getDaily(), getDailyFull(), S.salesMode);
+  }
 }
 window.toggleTheme = toggleTheme;
 applyTheme(S.theme);
@@ -650,7 +664,9 @@ window.syncPlatformButtons = syncPlatformButtons;
 
 function setYoyMetric(metric) {
   S.yoyMetric = metric;
-  if (S.daily) renderYoYChart(getDaily(), S.daily, S.salesMode);
+  // Pass the platform-filtered dataset (getDailyFull), NOT raw S.daily —
+  // otherwise the Last-Year series silently ignores the Platform toggle.
+  if (S.daily) renderYoYChart(getDaily(), getDailyFull(), S.salesMode);
 }
 window.setYoyMetric = setYoyMetric;
 

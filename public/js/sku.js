@@ -41,14 +41,11 @@ function computeSku(filteredRows, fullRows, f) {
   const orders    = sum(filteredRows, f.orders);
   const marginAmt = sum(filteredRows, f.margin);
 
-  // Weighted margin %: sum(margin $) / sum(gross $), NOT an average of the
-  // per-day NET_MARGIN_PCT rows — a $10 day must not weigh like a $10k day.
-  let mPct = null;
-  if (f.mPct) {
-    mPct = rev !== 0 ? marginAmt / rev : null;
-  } else {
-    mPct = rev !== 0 ? profit / rev : null;
-  }
+  // Weighted margin %: sum(margin $) / sum(gross $) in EVERY mode — same
+  // metric under the Margin column whether Net / Order / Refund is selected.
+  // (NOT an average of per-day pct rows — a $10 day must not weigh like a
+  // $10k day — and not profit/rev, which is a different metric.)
+  const mPct = rev !== 0 ? marginAmt / rev : null;
 
   // Return rate: always based on full rows
   const full30 = skuLastN(fullRows, 30);
@@ -201,7 +198,9 @@ function selectSkus(filteredData, fullData) {
     // under the active platform view regardless of the period selector.
     if (metric === 'inventory') {
       const inv = (typeof inventoryForView === 'function') ? inventoryForView(s.sku, S.platform) : { found: false };
-      return inv.found ? inv.total : Number.NEGATIVE_INFINITY;
+      // Large finite sentinel, not -Infinity: (-Inf) - (-Inf) = NaN breaks the
+      // comparator for pairs of no-inventory SKUs (inconsistent ordering).
+      return inv.found ? inv.total : -1e15;
     }
     if (period === 'total') {
       return { revenue: s.rev, profit: s.profit, orders: s.orders, margin: s.marginAmt, returnRate: s.rr30 || 0 }[metric] ?? 0;
@@ -273,7 +272,7 @@ function renderSKUTable(filteredData, fullData) {
             <span style="font-size:11px;color:var(--text3);min-width:18px;padding-top:3px;">${i + 1}</span>
             <div>
               <div style="font-weight:700;color:var(--text);font-size:14px;">${s.sku}</div>
-              ${s.desc ? `<div style="font-size:11px;color:var(--text3);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.desc}">${s.desc}</div>` : ''}
+              ${s.desc ? `<div style="font-size:11px;color:var(--text3);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(s.desc)}">${escHtml(s.desc)}</div>` : ''}
             </div>
           </div>
         </td>

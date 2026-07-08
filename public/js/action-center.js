@@ -193,11 +193,15 @@ function acPlatPill(platform) {
 
 // ── Data load (parallel, fills any missing dataset) ───────────────────────────
 
+// Column counts per level — keep in sync with the header builders below.
+const AC_COLS_BY_LEVEL = { order: 11, sku: 12, inv: 9, restock: 10 };
+function acColspan() { return AC_COLS_BY_LEVEL[S.acLevel || 'order'] || 11; }
+
 function acRenderLoading() {
   const el = document.getElementById('actionBody');
   if (!el) return;
   el.innerHTML = `
-    <tr><td colspan="11" style="text-align:center;padding:48px;color:var(--text3);">
+    <tr><td colspan="${acColspan()}" style="text-align:center;padding:48px;color:var(--text3);">
       <div style="display:inline-block;width:30px;height:30px;border:2px solid var(--border);border-top-color:#0ea5e9;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:12px;"></div>
       <div style="font-size:13px;">Crunching loss-making orders &amp; SKUs…</div>
     </td></tr>`;
@@ -234,7 +238,8 @@ async function loadActionCenterData() {
   } catch (err) {
     if (err.message === 'unauthorized') return;
     const el = document.getElementById('actionBody');
-    if (el) el.innerHTML = `<div class="card" style="padding:40px;text-align:center;color:#ef4444;font-size:13px;">${err.message}</div>`;
+    // #actionBody is a <tbody> — error state must be valid table content.
+    if (el) el.innerHTML = `<tr><td colspan="${acColspan()}" style="padding:40px;text-align:center;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
   }
 }
 window.loadActionCenterData = loadActionCenterData;
@@ -676,8 +681,15 @@ function acSkuTr(i) {
 //            PRICING rows only (concurrency 5), then re-render once.
 
 function acPriceKey(sku) {
-  const s = typeof cleanSkuKey === 'function' ? cleanSkuKey(sku) : String(sku || '');
-  return String(s).toUpperCase().trim();
+  // The price API cleans SKUs with the RECURSIVE form ((…))+$, so strip
+  // repeatedly until stable — a stacked-suffix SKU (X-FORFBA-AMZFBA) must
+  // produce the same key on both sides. cleanSkuKey alone is single-pass.
+  let s = String(sku || '');
+  if (typeof cleanSkuKey === 'function') {
+    let prev;
+    do { prev = s; s = cleanSkuKey(s); } while (s !== prev);
+  }
+  return s.toUpperCase().trim();
 }
 
 async function acEnsureCurrentPrices() {

@@ -302,7 +302,7 @@ function renderForecastTable() {
       <td style="text-align:right;font-size:12px;color:var(--text3);">${i + 1}</td>
       <td style="text-align:left;vertical-align:top;">
         <div style="font-weight:700;color:var(--text);font-size:13px;font-family:monospace;">${r.ORIGINAL_SKU || '—'}</div>
-        ${r.PRODUCT_NAME ? `<div style="font-size:11px;color:var(--text3);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.PRODUCT_NAME}">${r.PRODUCT_NAME}</div>` : ''}
+        ${r.PRODUCT_NAME ? `<div style="font-size:11px;color:var(--text3);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(r.PRODUCT_NAME)}">${escHtml(r.PRODUCT_NAME)}</div>` : ''}
       </td>
       <td style="text-align:right;">${channelChip(r.CHANNEL)}</td>
       <td style="text-align:left;">${manufacturerChip(r.MANUFACTURER)}</td>
@@ -420,7 +420,7 @@ function renderAgingTable() {
       <td style="text-align:right;font-size:12px;color:var(--text3);">${i + 1}</td>
       <td style="text-align:left;vertical-align:top;">
         <div style="font-weight:700;color:var(--text);font-size:13px;font-family:monospace;">${r.ORIGINAL_SKU || '—'}</div>
-        ${r.PRODUCT_NAME ? `<div style="font-size:11px;color:var(--text3);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.PRODUCT_NAME}">${r.PRODUCT_NAME}</div>` : ''}
+        ${r.PRODUCT_NAME ? `<div style="font-size:11px;color:var(--text3);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(r.PRODUCT_NAME)}">${escHtml(r.PRODUCT_NAME)}</div>` : ''}
       </td>
       <td style="text-align:right;">${channelChip(r.CHANNEL)}</td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmtInt(r.AVAILABLE)}</span></td>

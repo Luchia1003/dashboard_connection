@@ -154,7 +154,10 @@ function renderTimeComparisons(full) {
   ];
 
   document.getElementById('timeComparisons').innerHTML = configs.map(cfg => {
-    const cd = cfg.cur.length || 1, bd = cfg.base.length || 1;
+    // Per-day averages divide by distinct dates, not row count (2 rows/day
+    // with Platform=All) — same fix as renderInsights.
+    const days = rows => new Set(rows.map(r => r.DATE)).size || 1;
+    const cd = days(cfg.cur), bd = days(cfg.base);
     const rows = metrics.map(m => {
       const cTotal = sum(cfg.cur, m.f);
       const cAvg = cTotal / cd;
@@ -197,7 +200,17 @@ function renderCharts(data, mode) {
 
   const labels = Object.keys(monthly).sort();
   const vals = labels.map(k => monthly[k]);
-  const displayLabels = labels.map(k => g === 'day' ? k.slice(5) : k);
+  // Keep the year in day labels when the range spans multiple years, otherwise
+  // "07-01" of two different years is indistinguishable on the axis.
+  const multiYear = new Set(labels.map(k => k.slice(0, 4))).size > 1;
+  const displayLabels = labels.map(k => g === 'day' ? (multiYear ? k.slice(2) : k.slice(5)) : k);
+
+  // Subtitle reflects the actual bucketing (day for ≤90 unique dates).
+  const granLabel = g === 'day' ? 'Daily' : 'Monthly';
+  ['chart1Gran', 'chart2Gran'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = granLabel;
+  });
 
   const isLight = S.theme === 'light';
   const grid = isLight ? '#E5E7EB' : '#1e3a5f';
@@ -215,7 +228,7 @@ function renderCharts(data, mode) {
     options: {
       responsive: true, maintainAspectRatio: false,
       interaction: { intersect: false, mode: 'index' },
-      plugins: { legend: { display: false }, tooltip: { ...tip, callbacks: { label: c => ` Orders: ${Math.round(c.raw).toLocaleString()}` } } },
+      plugins: { legend: { display: false }, tooltip: { ...tip, callbacks: { label: c => ` ${c.dataset.label}: ${Math.round(c.raw).toLocaleString()}` } } },
       scales: { x: { grid: { display: false }, ticks: { color: tick, maxTicksLimit: 12 } }, y: { grid: { color: grid }, ticks: { color: tick, callback: v => Math.round(v).toLocaleString() } } },
     },
   });
@@ -373,8 +386,10 @@ function renderYoYChart(filtered, all, mode) {
     });
   }
 
-  // Format display labels
-  const dispLabels = labels.map(k => g === 'day' ? k.slice(5) : k);
+  // Format display labels (keep the year when the clamped range still crosses
+  // a Dec→Jan boundary, so "12-30" and "01-02" aren't yearless).
+  const yoyMultiYear = new Set(labels.map(k => k.slice(0, 4))).size > 1;
+  const dispLabels = labels.map(k => g === 'day' ? (yoyMultiYear ? k.slice(2) : k.slice(5)) : k);
 
   if (S.charts.yoy) { S.charts.yoy.destroy(); S.charts.yoy = null; }
 
@@ -386,9 +401,15 @@ function renderYoYChart(filtered, all, mode) {
   const metricLabel = { orders: 'Orders', revenue: 'Revenue', profit: 'Profit', productSales: 'Product Sales', margin: 'Margin $' }[yoyMetric] || 'Revenue';
   const isOrders = yoyMetric === 'orders';
 
-  // Determine year labels from data
-  const curYear = filtered[filtered.length - 1]?.DATE?.slice(0, 4) || new Date().getFullYear().toString();
-  const lyYear = String(parseInt(curYear) - 1);
+  // Determine year labels from the ACTUAL series spans — a range crossing a
+  // Dec→Jan boundary is labeled "2025–26", not just the end year.
+  const spanLabel = (a, b) => {
+    if (!a || !b) return new Date().getFullYear().toString();
+    const y1 = a.slice(0, 4), y2 = b.slice(0, 4);
+    return y1 === y2 ? y2 : `${y1}–${y2.slice(2)}`;
+  };
+  const curYear = spanLabel(minDate, maxDate);
+  const lyYear  = spanLabel(lyMin, lyMax);
 
   // ── Period totals (current vs LY same period) ────────────────────────────
   renderYoYTotals({

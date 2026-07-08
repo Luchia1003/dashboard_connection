@@ -42,7 +42,13 @@ window.setCouponDate = setCouponDate;
 const CP_V = 'font-size:14px;font-weight:700;';
 
 function cpDsBadge(r) {
-  if (Number(r.IS_DROPSHIP) !== 1) return '';
+  // Tolerant of the shapes Snowflake/JSON can return for BOOLEAN
+  // (true, 1, "true", "1") — same idiom as order-detail.js isDropShip.
+  const v = r.IS_DROPSHIP;
+  const isDs = v === true || v === 1 ||
+    (typeof v === 'string' && (v.toLowerCase() === 'true' || v === '1')) ||
+    Number(v) === 1;
+  if (!isDs) return '';
   const fee = Number(r.ORDER_DROPSHIP_FEE) || 0;
   return ` <span title="Dropship order — supplier fee ${fmt(fee)} (already included in margin)"
     style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:6px;vertical-align:middle;
