@@ -73,7 +73,7 @@ function renderKPIs(data, mode) {
   const cards = [
     {
       label: `${ml} Revenue`, val: fmt(revenue),
-      sub: `${data.length} days of data`,
+      sub: `${new Set(data.map(r => r.DATE)).size} days of data`,
       color: 'rgba(14,165,233,.12)', accent: '#0ea5e9',
       icon: `<svg width="18" height="18" fill="none" stroke="#0ea5e9" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`,
     },
@@ -193,7 +193,7 @@ function renderCharts(data, mode) {
 
   const f = salesF(mode);
   const g = gran(data);
-  const monthly = groupByMulti(data, g, { orders: f.orders, rev: f.rev, profit: f.profit, mSum: f.mPct || f.margin });
+  const monthly = groupByMulti(data, g, { orders: f.orders, rev: f.rev, profit: f.profit, mSum: f.margin });
 
   const labels = Object.keys(monthly).sort();
   const vals = labels.map(k => monthly[k]);
@@ -225,9 +225,9 @@ function renderCharts(data, mode) {
   const mgnVals = labels.map((k, i) => {
     const v = vals[i];
     if (showMgnPct) {
-      // average margin pct for the grouped period
-      const count = data.filter(r => (g === 'day' ? r.DATE : r.DATE.slice(0, 7)) === k).length || 1;
-      return v.mSum / count * 100;
+      // Weighted margin % per bucket: sum(margin $) / sum(gross $) — matches
+      // the KPI card (was an unweighted average of per-row NET_MARGIN_PCT).
+      return v.rev ? v.mSum / v.rev * 100 : 0;
     }
     return v.mSum || 0; // dollar margin
   });
@@ -452,10 +452,15 @@ function renderInsights(full) {
   const d14 = lastN(full, 14, anchor);
   const d30 = lastN(full, 30, anchor);
 
-  const avg7Rev  = avg(d7,  'NET_GROSS_SALES');
-  const avg30Rev = avg(d30, 'NET_GROSS_SALES');
-  const avg14Mgn = avg(d14, 'NET_MARGIN_PCT');
-  const avg30Mgn = avg(d30, 'NET_MARGIN_PCT');
+  // Per-DAY averages: divide by distinct dates, not row count (with Platform =
+  // All there are 2 rows per day, which used to halve the $/day figures).
+  const perDay = (rows, fld) => { const n = new Set(rows.map(r => r.DATE)).size; return n ? sum(rows, fld) / n : 0; };
+  // Weighted margin %: sum(margin $) / sum(gross $), not an average of pcts.
+  const mgnPct = rows => { const gs = sum(rows, 'NET_GROSS_SALES'); return gs ? sum(rows, 'NET_MARGIN') / gs : 0; };
+  const avg7Rev  = perDay(d7,  'NET_GROSS_SALES');
+  const avg30Rev = perDay(d30, 'NET_GROSS_SALES');
+  const avg14Mgn = mgnPct(d14);
+  const avg30Mgn = mgnPct(d30);
 
   const items = [];
   if (avg7Rev > avg30Rev * 1.5)

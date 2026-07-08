@@ -41,9 +41,11 @@ function computeSku(filteredRows, fullRows, f) {
   const orders    = sum(filteredRows, f.orders);
   const marginAmt = sum(filteredRows, f.margin);
 
+  // Weighted margin %: sum(margin $) / sum(gross $), NOT an average of the
+  // per-day NET_MARGIN_PCT rows — a $10 day must not weigh like a $10k day.
   let mPct = null;
   if (f.mPct) {
-    mPct = avg(filteredRows, f.mPct);
+    mPct = rev !== 0 ? marginAmt / rev : null;
   } else {
     mPct = rev !== 0 ? profit / rev : null;
   }
