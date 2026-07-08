@@ -83,6 +83,12 @@ function fmtDate(v) {
   return String(v).slice(0, 10);
 }
 
+function fmtMoney(v, digits = 2) {
+  if (v == null || isNaN(v)) return '—';
+  return '$' + Number(v).toLocaleString('en-US',
+    { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
 // Channel chip styling
 function channelChip(ch) {
   const c = String(ch || '').toLowerCase().trim();
@@ -348,6 +354,9 @@ function renderAgingTable() {
       <th style="text-align:left;min-width:200px;">SKU / Product</th>
       <th style="min-width:140px;">Warehouse</th>
       <th style="min-width:90px;">Available</th>
+      <th style="min-width:90px;">Unit Cost</th>
+      <th style="min-width:110px;">Capital Stuck</th>
+      <th style="min-width:100px;">Profit / Unit</th>
       <th style="min-width:150px;">Last Order</th>
       <th style="min-width:90px;">Days Since</th>
       <th style="min-width:110px;">Lifetime Sold</th>
@@ -376,6 +385,9 @@ function renderAgingTable() {
     available:             r => Number(r.AVAILABLE)            || 0,
     lifetime_units_sold:   r => Number(r.LIFETIME_UNITS_SOLD)  || 0,
     days_since_last_order: r => Number(r.DAYS_SINCE_LAST_ORDER) || 0,
+    unit_cost:             r => Number(r.UNIT_COST)            || 0,
+    capital_stuck:         r => Number(r.CAPITAL_STUCK)        || 0,
+    profit_per_unit:       r => Number(r.PROFIT_PER_UNIT)      || 0,
   }[sortBy] || (r => Number(r.DAYS_SINCE_LAST_ORDER) || 0);
 
   rows.sort((a, b) => {
@@ -387,14 +399,15 @@ function renderAgingTable() {
 
   const meta = document.getElementById('inventoryMeta');
   if (meta) {
-    const totalUnits = rows.reduce((a, r) => a + (Number(r.AVAILABLE) || 0), 0);
-    meta.textContent = `${rows.length.toLocaleString()} aging SKUs · ${totalUnits.toLocaleString()} units sitting`;
+    const totalUnits   = rows.reduce((a, r) => a + (Number(r.AVAILABLE) || 0), 0);
+    const totalCapital = rows.reduce((a, r) => a + (Number(r.CAPITAL_STUCK) || 0), 0);
+    meta.textContent = `${rows.length.toLocaleString()} aging SKUs · ${totalUnits.toLocaleString()} units sitting · ${fmtMoney(totalCapital, 0)} capital stuck`;
   }
 
   const tbody = document.getElementById('inventoryBody');
   if (!rows.length) {
     const msg = query ? `No SKUs matching "${searchRaw}"` : 'No aging inventory';
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
 
@@ -424,6 +437,9 @@ function renderAgingTable() {
       </td>
       <td style="text-align:right;">${channelChip(r.CHANNEL)}</td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmtInt(r.AVAILABLE)}</span></td>
+      <td style="text-align:right;"><span style="font-size:13px;color:var(--text2);">${fmtMoney(r.UNIT_COST)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:var(--text);">${fmtMoney(r.CAPITAL_STUCK, 0)}</span></td>
+      <td style="text-align:right;"><span style="font-size:13px;font-weight:700;color:${Number(r.PROFIT_PER_UNIT) < 0 ? '#ef4444' : 'var(--text)'};">${fmtMoney(r.PROFIT_PER_UNIT)}</span></td>
       <td style="text-align:right;vertical-align:top;">
         <div style="font-size:12px;color:var(--text2);">${fmtDate(r.LAST_ORDER_DATE)}</div>
         ${showLastChan ? `<div style="margin-top:4px;">${channelChip(r.LAST_ORDER_CHANNEL)}</div>` : ''}

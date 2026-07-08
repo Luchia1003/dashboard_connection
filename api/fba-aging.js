@@ -35,7 +35,7 @@ module.exports = async function handler(req, res) {
     await new Promise((resolve, reject) => conn.connect(err => err ? reject(err) : resolve()));
     const rows = await new Promise((resolve, reject) => {
       conn.execute({
-        sqlText: `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.AGING_INVENTORY ORDER BY DAYS_SINCE_LAST_ORDER ASC, AVAILABLE DESC`,
+        sqlText: `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.AGING_INVENTORY_ENRICHED ORDER BY DAYS_SINCE_LAST_ORDER ASC, AVAILABLE DESC`,
         complete: (err, stmt, rows) => err ? reject(err) : resolve(rows),
       });
     });
