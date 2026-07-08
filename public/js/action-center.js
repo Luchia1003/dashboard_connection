@@ -289,19 +289,21 @@ function acOrderPricingDropship() {
 
 // 2b. DAILY_ORDER_COUPON_PROFIT → COUPON. Losses already negative before the
 // coupon are PRICING and left for dedup to merge with the 2a hit.
+// Columns follow the 2026-07-06 month-to-date rework: ORDER_* are the
+// order-side values (pre-refund); ORDER_MARGIN is pre-coupon, pre-COGS.
 function acOrderCoupon() {
   const out = [];
   const tr = (typeof computeRange === 'function') ? computeRange(S.tr, S.customFrom, S.customTo) : null;
   (S.couponOrder || []).forEach(r => {
-    const profit = acNum(r.PROFIT);
+    const profit = acNum(r.ORDER_PROFIT);
     if (profit >= 0) return;
     if (tr) {
       const d = String(r.ORDER_DATE || '').slice(0, 10);
       if (d < tr.f || d > tr.t) return;
     }
 
-    const qty         = acNum(r.QUANTITY);
-    const salesMargin = acNum(r.SALES_MARGIN); // pre-coupon, pre-COGS in this table
+    const qty         = acNum(r.ORDER_QTY);
+    const salesMargin = acNum(r.ORDER_MARGIN); // pre-coupon, pre-COGS in this table
     const unitCost    = acNum(r.UNIT_COST);
     const preCoupon   = salesMargin - unitCost * qty;
     if (preCoupon < 0) return; // PRICING — handled by 2a / dedup
@@ -309,13 +311,13 @@ function acOrderCoupon() {
     out.push({
       key: `order:${r.ORDER_ID}:${r.SKU}`,
       level: 'order', cause: 'COUPON',
-      orderId: r.ORDER_ID, sku: r.SKU, platform: r.PLATFORM || '',
+      orderId: r.ORDER_ID, sku: r.SKU, platform: 'Amazon', // coupon tables are Amazon-only
       orderDate: String(r.ORDER_DATE || '').slice(0, 10),
       profit, preFreeProfit: preCoupon,
-      productSales: acNum(r.PRODUCT_SALES),
+      productSales: acNum(r.ORDER_PRODUCT_SALES),
       salesMargin, unitCost, qty,
-      couponFee: acNum(r.COUPON_FEE),
-      shippingFee: acNum(r.SHIPPING_FEE),
+      couponFee: acNum(r.ORDER_COUPON_FEE),
+      shippingFee: acNum(r.ORDER_SHIPPING_FEE),
     });
   });
   return out;
@@ -395,19 +397,26 @@ function acSkuPricingReturn() {
   return out;
 }
 
-// 3b. DAILY_SKU_COUPON_PROFIT → COUPON (SKU level). Data is only ~3 days and has
-// no platform column, so we aggregate by SKU across its inherent window.
+// 3b. DAILY_SKU_COUPON_PROFIT → COUPON (SKU level). Month-to-date (since
+// 2026-07-06) and Amazon-only. Honors the topbar Time Range like 3a, and the
+// SKU is cleaned so the dedup key collides with 3a's cleaned SALES_SKU
+// (PRICING 3 > COUPON 2 then actually merges).
 function acSkuCoupon() {
+  const tr = (typeof computeRange === 'function') ? computeRange(S.tr, S.customFrom, S.customTo) : null;
   const groups = new Map();
   (S.couponSku || []).forEach(r => {
-    const sku = r.SKU || 'UNKNOWN';
+    if (tr) {
+      const d = String(r.ORDER_DATE || '').slice(0, 10);
+      if (d < tr.f || d > tr.t) return;
+    }
+    const sku = (typeof cleanSkuKey === 'function' ? cleanSkuKey(r.SKU) : String(r.SKU || '')) || 'UNKNOWN';
     let g = groups.get(sku);
     if (!g) { g = { sku, margin: 0, qty: 0, profit: 0, couponFee: 0, productSales: 0, unitCost: acNum(r.UNIT_COST) }; groups.set(sku, g); }
-    g.margin       += acNum(r.TOTAL_MARGIN);
-    g.qty          += acNum(r.TOTAL_QUANTITY);
-    g.profit       += acNum(r.TOTAL_PROFIT);
-    g.couponFee    += acNum(r.TOTAL_COUPON_FEE);
-    g.productSales += acNum(r.TOTAL_PRODUCT_SALES);
+    g.margin       += acNum(r.ORDER_MARGIN);
+    g.qty          += acNum(r.ORDER_QTY);
+    g.profit       += acNum(r.ORDER_PROFIT);
+    g.couponFee    += acNum(r.ORDER_COUPON_FEE);
+    g.productSales += acNum(r.ORDER_PRODUCT_SALES);
     if (!g.unitCost) g.unitCost = acNum(r.UNIT_COST);
   });
 
@@ -417,9 +426,9 @@ function acSkuCoupon() {
     const preCoupon = g.margin - g.unitCost * g.qty;
     if (preCoupon < 0) return; // PRICING — left for 3a
     out.push({
-      key: `sku::${g.sku}`, // no platform in this table
+      key: `sku:Amazon:${g.sku}`, // same shape as 3a keys so dedup can merge
       level: 'sku', cause: 'COUPON', skuKind: 'coupon',
-      sku: g.sku, platform: '',
+      sku: g.sku, platform: 'Amazon',
       profit: g.profit, preFreeProfit: preCoupon,
       productSales: g.productSales, salesMargin: g.margin,
       unitCost: g.unitCost, qty: g.qty, couponFee: g.couponFee,
@@ -482,12 +491,13 @@ function acOrderCsvRow(i) {
 
 function acSkuCsvRow(i) {
   if (i.skuKind === 'coupon') {
+    // Coupon aggregates are order-side (pre-refund) values → ORDER_* columns.
     return {
       CAUSE: i.cause, SKU: i.sku, PLATFORM: i.platform,
-      ORDER_PROFIT: '', NET_PROFIT: acRound(i.profit),
-      ORDER_PRODUCT_SALES: '', NET_PRODUCT_SALES: acRound(i.productSales),
-      ORDER_MARGIN: '', NET_MARGIN: acRound(i.salesMargin),
-      ORDER_QTY: '', NET_QTY: i.qty, UNIT_COST: acRound(i.unitCost),
+      ORDER_PROFIT: acRound(i.profit), NET_PROFIT: '',
+      ORDER_PRODUCT_SALES: acRound(i.productSales), NET_PRODUCT_SALES: '',
+      ORDER_MARGIN: acRound(i.salesMargin), NET_MARGIN: '',
+      ORDER_QTY: i.qty, NET_QTY: '', UNIT_COST: acRound(i.unitCost),
       RETURN_RATE: '', COUPON_FEE: acRound(i.couponFee),
       PRE_COUPON_PROFIT: acRound(i.preFreeProfit), PROFIT: acRound(i.profit),
     };
@@ -930,8 +940,8 @@ function renderActionCenterPage() {
   if (level === 'sku') acEnsureCurrentPrices();
 
   const subtitle = level === 'order'
-    ? `90-day rolling · Time Range: ${typeof trDisplay === 'function' ? trDisplay() : 'All time'} (coupon: last 3 days)`
-    : `Follows Product Detail Time Range · ${typeof trDisplay === 'function' ? trDisplay() : 'All time'} (coupon: last 3 days)`;
+    ? `90-day rolling · Time Range: ${typeof trDisplay === 'function' ? trDisplay() : 'All time'} (coupon: month-to-date)`
+    : `Follows Product Detail Time Range · ${typeof trDisplay === 'function' ? trDisplay() : 'All time'} (coupon: month-to-date)`;
 
   const dlIcon = '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>';
   const ctrl = 'padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg);color:var(--text);';

@@ -7,7 +7,7 @@
 // merged view (All, Amazon+Shopify) counts HnP exactly once. FBA is independent.
 
 // Same single regex clean as SKU_SUMMARY_METRICS' SALES_SKU.
-const INV_CLEAN_RE = /(-FORFBA-USEUPC|-FORFBA-AMAZON-BARCODE|-FORFBA--|-FORFBA-|-FORFBA|-AMZFBA)$/;
+const INV_CLEAN_RE = /(-FORFBA-USEUPC|-FORFBA-USE-UPC|-FORFBA-AMAZON-BARCODE|-FORFBA--|-FORFBA-|-FORFBA|-AMZFBA)$/;
 
 function cleanSkuKey(s) {
   return String(s == null ? '' : s).toUpperCase().trim().replace(INV_CLEAN_RE, '');
