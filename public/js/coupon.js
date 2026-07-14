@@ -111,35 +111,50 @@ window.loadCouponData = loadCouponData;
 
 // ── View toggle ───────────────────────────────────────────────────────────────
 
-function setCouponView(view, btn) {
-  S.couponView = view;
+// Topbar toggle = platform (Amazon | Shopify); the Order/SKU level lives in the
+// controls row (couponAmzLevelSel for Amazon, couponShopLevel for Shopify).
+function applyCouponControls() {
+  const isShop = (S.couponPlatform || 'amazon') === 'shopify';
+  const view = S.couponView || 'sku';
+  const show = (id, on, disp) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = on ? (disp || 'flex') : 'none';
+  };
+  show('couponAmzLevel',    !isShop);
+  show('couponDateWrap',    !isShop);
+  show('couponSkuControls', !isShop && view === 'sku');
+  show('couponOrdControls', !isShop && view === 'order');
+  show('couponShopControls', isShop);
+  show('couponShopSummary',  isShop, 'block');
+  const prevBtn = document.getElementById('couponPrevDlBtn');
+  if (prevBtn) prevBtn.style.display = isShop ? 'none' : '';
+}
+
+function setCouponPlatform(platform, btn) {
+  S.couponPlatform = platform;
   document.querySelectorAll('#couponToggle .toggle-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('couponSkuControls').style.display  = view === 'sku'     ? 'flex' : 'none';
-  document.getElementById('couponOrdControls').style.display  = view === 'order'   ? 'flex' : 'none';
-  const shopCtl = document.getElementById('couponShopControls');
-  if (shopCtl) shopCtl.style.display = view === 'shopify' ? 'flex' : 'none';
-  // The MTD date filter + "Last Month" CSV only apply to the Amazon coupon views.
-  const dateWrap = document.getElementById('couponDateWrap');
-  if (dateWrap) dateWrap.style.display = view === 'shopify' ? 'none' : 'flex';
-  const prevBtn = document.getElementById('couponPrevDlBtn');
-  if (prevBtn) prevBtn.style.display = view === 'shopify' ? 'none' : '';
-  const shopSum = document.getElementById('couponShopSummary');
-  if (shopSum) shopSum.style.display = view === 'shopify' ? '' : 'none';
+  applyCouponControls();
   renderCouponPage();
 }
-window.setCouponView = setCouponView;
+window.setCouponPlatform = setCouponPlatform;
+
+function setCouponLevel(view) {
+  S.couponView = view;
+  applyCouponControls();
+  renderCouponPage();
+}
+window.setCouponLevel = setCouponLevel;
 
 // ── Main render dispatcher ────────────────────────────────────────────────────
 
 function renderCouponPage() {
-  const view = S.couponView || 'sku';
-  if (view === 'shopify') {
+  if ((S.couponPlatform || 'amazon') === 'shopify') {
     if (!S.couponShopSku || !S.couponShopOrder) { loadCouponShopData(); return; }
     renderCouponShopify();
   } else {
     if (!S.couponSku || !S.couponOrder) { loadCouponData(); return; }
-    if (view === 'sku') renderCouponSkuTable();
+    if ((S.couponView || 'sku') === 'sku') renderCouponSkuTable();
     else renderCouponOrderTable();
   }
   if (typeof updateDownloadHints === 'function') updateDownloadHints();

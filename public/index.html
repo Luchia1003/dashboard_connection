@@ -414,9 +414,8 @@
         <button class="platform-btn"        data-platform="shopify" onclick="setPlatform('shopify',this)">Shopify</button>
       </div>
       <div class="toggle-group" id="couponToggle" style="display:none;">
-        <button class="toggle-btn"        onclick="setCouponView('order',this)">Order Level</button>
-        <button class="toggle-btn active" onclick="setCouponView('sku',this)">SKU Level</button>
-        <button class="toggle-btn"        onclick="setCouponView('shopify',this)">Shopify</button>
+        <button class="toggle-btn active" onclick="setCouponPlatform('amazon',this)">Amazon</button>
+        <button class="toggle-btn"        onclick="setCouponPlatform('shopify',this)">Shopify</button>
       </div>
       <div class="toggle-group" id="inventoryToggle" style="display:none;">
         <button class="toggle-btn active" onclick="setInventoryView('forecast',this)">Forecast</button>
@@ -731,6 +730,16 @@
     <section id="couponSection" style="display:none;">
       <!-- Sticky controls -->
       <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;z-index:25;">
+        <!-- Amazon level picker (Order / SKU) — hidden on the Shopify platform -->
+        <div id="couponAmzLevel" style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:12px;color:var(--text3);">Level</span>
+          <select id="couponAmzLevelSel" class="ctrl-sel" onchange="setCouponLevel(this.value)">
+            <option value="sku">SKU Level</option>
+            <option value="order">Order Level</option>
+          </select>
+          <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;margin-left:6px;"></div>
+        </div>
+
         <!-- Coupon-specific date filter (independent from topbar; Amazon views only) -->
         <div id="couponDateWrap" style="display:flex;align-items:center;gap:6px;">
           <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>

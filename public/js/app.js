@@ -8,6 +8,7 @@ const S = {
   couponSku: null,
   couponOrder: null,
   couponView: 'sku',
+  couponPlatform: 'amazon',
   couponDate: '',
   inventoryForecast: null,
   inventoryPool: null,
@@ -183,7 +184,7 @@ function downloadOrderDetailCSV() {
 // same contract as every other page's CSV. Filename reflects view + date filter.
 function downloadCouponCSV() {
   // Shopify coupon view: download exactly what the current Level/Scope/Search shows.
-  if (S.couponView === 'shopify') {
+  if (S.couponPlatform === 'shopify') {
     if (!S.couponShopSku || !S.couponShopOrder) { renderCouponPage(); return; }
     const rows = typeof getCouponShopFiltered === 'function' ? getCouponShopFiltered() : [];
     if (!rows.length) { alert('No rows match the current Shopify coupon filters.'); return; }
@@ -208,7 +209,7 @@ function downloadCouponCSV() {
 // Coupon Order → previous FULL month (e.g. in July this downloads all of June).
 // Served by PREV_MONTH_*_COUPON_PROFIT, rebuilt daily so late refunds keep landing.
 async function downloadCouponPrevMonthCSV() {
-  if (S.couponView === 'shopify') { alert('The Shopify coupon view accumulates from the batch start date — no last-month window.'); return; }
+  if (S.couponPlatform === 'shopify') { alert('The Shopify coupon view accumulates from the batch start date — no last-month window.'); return; }
   const btn = document.getElementById('couponPrevDlBtn');
   try {
     if (!S.couponSkuPrev || !S.couponOrderPrev) {
@@ -381,7 +382,7 @@ function updateDownloadHints() {
   // Coupon → SKU level / Order level · date filter · search (mirrors the CSV)
   const cpH = document.getElementById('couponDlHint');
   if (cpH) {
-    if (S.couponView === 'shopify') {
+    if (S.couponPlatform === 'shopify') {
       const lvl = ((document.getElementById('couponShopLevel') || {}).value || 'sku') === 'order' ? 'Orders' : 'SKU summary';
       const scope = ((document.getElementById('couponShopScope') || {}).value || 'target') === 'all' ? 'All variants' : 'Target SKUs';
       const q = String(((document.getElementById('couponShopSearch') || {}).value || '')).trim();
