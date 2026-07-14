@@ -182,6 +182,15 @@ function downloadOrderDetailCSV() {
 // Coupon Order → mirrors the filters the user sees (date dropdown + search),
 // same contract as every other page's CSV. Filename reflects view + date filter.
 function downloadCouponCSV() {
+  // Shopify coupon view: download exactly what the current Level/Scope/Search shows.
+  if (S.couponView === 'shopify') {
+    if (!S.couponShopSku || !S.couponShopOrder) { renderCouponPage(); return; }
+    const rows = typeof getCouponShopFiltered === 'function' ? getCouponShopFiltered() : [];
+    if (!rows.length) { alert('No rows match the current Shopify coupon filters.'); return; }
+    const lvl = (document.getElementById('couponShopLevel') || {}).value || 'sku';
+    downloadCSV(rows, `shopify_coupon_${lvl}_level_${todayStamp()}.csv`);
+    return;
+  }
   if (!S.couponSku || !S.couponOrder) { loadCouponData(); return; }
   const dateLabel = S.couponDate || 'mtd';
   const isSku = (S.couponView || 'sku') === 'sku';
@@ -199,6 +208,7 @@ function downloadCouponCSV() {
 // Coupon Order → previous FULL month (e.g. in July this downloads all of June).
 // Served by PREV_MONTH_*_COUPON_PROFIT, rebuilt daily so late refunds keep landing.
 async function downloadCouponPrevMonthCSV() {
+  if (S.couponView === 'shopify') { alert('The Shopify coupon view accumulates from the batch start date — no last-month window.'); return; }
   const btn = document.getElementById('couponPrevDlBtn');
   try {
     if (!S.couponSkuPrev || !S.couponOrderPrev) {
@@ -371,11 +381,18 @@ function updateDownloadHints() {
   // Coupon → SKU level / Order level · date filter · search (mirrors the CSV)
   const cpH = document.getElementById('couponDlHint');
   if (cpH) {
-    const view = (S.couponView === 'order') ? 'Order level' : 'SKU level';
-    const date = S.couponDate || 'Month-to-date';
-    const sEl = document.getElementById(S.couponView === 'order' ? 'couponOrdSearch' : 'couponSkuSearch');
-    const q = String((sEl || {}).value || '').trim();
-    cpH.innerHTML = HINT_PREFIX + hintParts(q ? [view, date, `search: "${q}"`] : [view, date]);
+    if (S.couponView === 'shopify') {
+      const lvl = ((document.getElementById('couponShopLevel') || {}).value || 'sku') === 'order' ? 'Orders' : 'SKU summary';
+      const scope = ((document.getElementById('couponShopScope') || {}).value || 'target') === 'all' ? 'All variants' : 'Target SKUs';
+      const q = String(((document.getElementById('couponShopSearch') || {}).value || '')).trim();
+      cpH.innerHTML = HINT_PREFIX + hintParts(q ? ['Shopify', lvl, scope, `search: "${q}"`] : ['Shopify', lvl, scope]);
+    } else {
+      const view = (S.couponView === 'order') ? 'Order level' : 'SKU level';
+      const date = S.couponDate || 'Month-to-date';
+      const sEl = document.getElementById(S.couponView === 'order' ? 'couponOrdSearch' : 'couponSkuSearch');
+      const q = String((sEl || {}).value || '').trim();
+      cpH.innerHTML = HINT_PREFIX + hintParts(q ? [view, date, `search: "${q}"`] : [view, date]);
+    }
   }
 
   // Inventory → either Forecast (channel · status) or Slow Traffic (warehouse · priority)

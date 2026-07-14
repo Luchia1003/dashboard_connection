@@ -35,9 +35,15 @@ module.exports = async function handler(req, res) {
     await new Promise((resolve, reject) => conn.connect(err => err ? reject(err) : resolve()));
     const rows = await new Promise((resolve, reject) => {
       conn.execute({
-        // ?window=prev -> previous full month; default -> month-to-date.
+        // ?window=prev -> previous full month; ?window=shopify -> Shopify coupon
+        // batch order lines (accumulates since batch start); default -> month-to-date.
         // Whitelist mapping (never interpolate user input into SQL).
-        sqlText: `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.${req.query && req.query.window === 'prev' ? 'PREV_MONTH_ORDER_COUPON_PROFIT' : 'DAILY_ORDER_COUPON_PROFIT'} ORDER BY ORDER_DATE ASC`,
+        sqlText: (() => {
+          const w = req.query && req.query.window;
+          if (w === 'prev')    return 'SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.PREV_MONTH_ORDER_COUPON_PROFIT ORDER BY ORDER_DATE ASC';
+          if (w === 'shopify') return 'SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.SHOPIFY_COUPON_ORDER_PROFIT ORDER BY ORDER_DATE ASC, ORDER_ID ASC';
+          return 'SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.DAILY_ORDER_COUPON_PROFIT ORDER BY ORDER_DATE ASC';
+        })(),
         complete: (err, stmt, rows) => err ? reject(err) : resolve(rows),
       });
     });

@@ -416,6 +416,7 @@
       <div class="toggle-group" id="couponToggle" style="display:none;">
         <button class="toggle-btn"        onclick="setCouponView('order',this)">Order Level</button>
         <button class="toggle-btn active" onclick="setCouponView('sku',this)">SKU Level</button>
+        <button class="toggle-btn"        onclick="setCouponView('shopify',this)">Shopify</button>
       </div>
       <div class="toggle-group" id="inventoryToggle" style="display:none;">
         <button class="toggle-btn active" onclick="setInventoryView('forecast',this)">Forecast</button>
@@ -730,14 +731,14 @@
     <section id="couponSection" style="display:none;">
       <!-- Sticky controls -->
       <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;z-index:25;">
-        <!-- Coupon-specific date filter (independent from topbar) -->
-        <div style="display:flex;align-items:center;gap:6px;">
+        <!-- Coupon-specific date filter (independent from topbar; Amazon views only) -->
+        <div id="couponDateWrap" style="display:flex;align-items:center;gap:6px;">
           <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
           <select id="couponDateSel" class="ctrl-sel" style="min-width:110px;" onchange="setCouponDate(this.value)">
             <option value="">This Month</option>
           </select>
+          <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;margin-left:6px;"></div>
         </div>
-        <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
 
         <!-- SKU-level controls -->
         <div id="couponSkuControls" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -788,6 +789,39 @@
           </div>
         </div>
 
+        <!-- Shopify coupon controls (Summer Sale batch, accumulating since 2026-07-14) -->
+        <div id="couponShopControls" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:12px;color:var(--text3);">Level</span>
+          <select id="couponShopLevel" class="ctrl-sel" onchange="renderCouponPage()">
+            <option value="sku">SKU Summary</option>
+            <option value="order">Orders</option>
+          </select>
+          <span style="font-size:12px;color:var(--text3);">Scope</span>
+          <select id="couponShopScope" class="ctrl-sel" onchange="renderCouponPage()">
+            <option value="target">Target SKUs</option>
+            <option value="all">All (incl. swept variants)</option>
+          </select>
+          <span style="font-size:12px;color:var(--text3);">Sort</span>
+          <select id="couponShopSort" class="ctrl-sel" onchange="renderCouponPage()">
+            <option value="profit">Est Profit</option>
+            <option value="sales">Product Sales</option>
+            <option value="qty">Qty Sold</option>
+            <option value="discount">Est Coupon $</option>
+            <option value="pct">Discount %</option>
+            <option value="date">Last Order Date</option>
+            <option value="sku">SKU</option>
+          </select>
+          <select id="couponShopDir" class="ctrl-sel" onchange="renderCouponPage()">
+            <option value="desc">High → Low</option>
+            <option value="asc">Low → High</option>
+          </select>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35"/></svg>
+            <input id="couponShopSearch" type="text" class="ctrl-inp" placeholder="Search SKU / Order…" style="width:150px;" oninput="renderCouponPage()" />
+            <button id="couponShopSearchClear" onclick="clearCouponShopSearch()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px;" title="Clear">✕</button>
+          </div>
+        </div>
+
         <!-- Right cluster: context-aware CSV downloads (this month + last full month) -->
         <div class="dl-wrap" style="margin-left:auto;">
           <div style="display:flex;gap:6px;">
@@ -803,6 +837,9 @@
           <span class="dl-hint" id="couponDlHint"></span>
         </div>
       </div>
+
+      <!-- Shopify coupon summary strip (visible on the Shopify view only) -->
+      <div id="couponShopSummary" class="card" style="display:none;padding:10px 16px;margin-bottom:16px;font-size:13px;color:var(--text2);"></div>
 
       <!-- Table -->
       <div class="card" style="overflow:hidden;">
