@@ -106,6 +106,17 @@
     }
     .toggle-btn.active { background: #0ea5e9; color: white; }
 
+    /* Level pills (Coupon page SKU/Order switch) — chip style, blue theme */
+    .lvl-pill {
+      padding: 3px 12px; border-radius: 8px; font-size: 11px; font-weight: 700;
+      letter-spacing: .4px; text-transform: uppercase; cursor: pointer; transition: all .15s;
+      color: var(--text3); background: transparent; border: 1.5px solid var(--border);
+    }
+    .lvl-pill:hover { color: var(--text2); border-color: var(--text3); }
+    .lvl-pill.active {
+      color: #0ea5e9; background: rgba(14,165,233,.12); border-color: rgba(14,165,233,.55);
+    }
+
     .platform-group {
       display: inline-flex; background: var(--input); border: 1px solid var(--border);
       border-radius: 10px; padding: 4px; gap: 3px;
@@ -732,11 +743,8 @@
       <div class="card ctrl-row" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;z-index:25;">
         <!-- Amazon level picker (Order / SKU) — hidden on the Shopify platform -->
         <div id="couponAmzLevel" style="display:flex;align-items:center;gap:6px;">
-          <span style="font-size:12px;color:var(--text3);">Level</span>
-          <select id="couponAmzLevelSel" class="ctrl-sel" onchange="setCouponLevel(this.value)">
-            <option value="sku">SKU Level</option>
-            <option value="order">Order Level</option>
-          </select>
+          <button class="lvl-pill active" onclick="setCouponLevel('sku',this)">SKU Level</button>
+          <button class="lvl-pill"        onclick="setCouponLevel('order',this)">Order Level</button>
           <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;margin-left:6px;"></div>
         </div>
 
@@ -800,11 +808,11 @@
 
         <!-- Shopify coupon controls (Summer Sale batch, accumulating since 2026-07-14) -->
         <div id="couponShopControls" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-size:12px;color:var(--text3);">Level</span>
-          <select id="couponShopLevel" class="ctrl-sel" onchange="renderCouponPage()">
-            <option value="sku">SKU Summary</option>
-            <option value="order">Orders</option>
-          </select>
+          <div id="couponShopLevelWrap" style="display:flex;align-items:center;gap:6px;">
+            <button class="lvl-pill active" onclick="setCouponShopLevel('sku',this)">SKU Level</button>
+            <button class="lvl-pill"        onclick="setCouponShopLevel('order',this)">Order Level</button>
+          </div>
+          <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
           <span style="font-size:12px;color:var(--text3);">Scope</span>
           <select id="couponShopScope" class="ctrl-sel" onchange="renderCouponPage()">
             <option value="target">Target SKUs</option>

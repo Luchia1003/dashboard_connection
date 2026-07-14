@@ -188,7 +188,7 @@ function downloadCouponCSV() {
     if (!S.couponShopSku || !S.couponShopOrder) { renderCouponPage(); return; }
     const rows = typeof getCouponShopFiltered === 'function' ? getCouponShopFiltered() : [];
     if (!rows.length) { alert('No rows match the current Shopify coupon filters.'); return; }
-    const lvl = (document.getElementById('couponShopLevel') || {}).value || 'sku';
+    const lvl = S.couponShopLevel || 'sku';
     downloadCSV(rows, `shopify_coupon_${lvl}_level_${todayStamp()}.csv`);
     return;
   }
@@ -383,7 +383,7 @@ function updateDownloadHints() {
   const cpH = document.getElementById('couponDlHint');
   if (cpH) {
     if (S.couponPlatform === 'shopify') {
-      const lvl = ((document.getElementById('couponShopLevel') || {}).value || 'sku') === 'order' ? 'Orders' : 'SKU summary';
+      const lvl = (S.couponShopLevel || 'sku') === 'order' ? 'Order level' : 'SKU level';
       const scope = ((document.getElementById('couponShopScope') || {}).value || 'target') === 'all' ? 'All variants' : 'Target SKUs';
       const q = String(((document.getElementById('couponShopSearch') || {}).value || '')).trim();
       cpH.innerHTML = HINT_PREFIX + hintParts(q ? ['Shopify', lvl, scope, `search: "${q}"`] : ['Shopify', lvl, scope]);

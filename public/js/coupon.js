@@ -111,8 +111,8 @@ window.loadCouponData = loadCouponData;
 
 // ── View toggle ───────────────────────────────────────────────────────────────
 
-// Topbar toggle = platform (Amazon | Shopify); the Order/SKU level lives in the
-// controls row (couponAmzLevelSel for Amazon, couponShopLevel for Shopify).
+// Topbar toggle = platform (Amazon | Shopify); the SKU/Order level is a pair of
+// .lvl-pill buttons in the controls row (couponAmzLevel / couponShopLevelWrap).
 function applyCouponControls() {
   const isShop = (S.couponPlatform || 'amazon') === 'shopify';
   const view = S.couponView || 'sku';
@@ -139,12 +139,26 @@ function setCouponPlatform(platform, btn) {
 }
 window.setCouponPlatform = setCouponPlatform;
 
-function setCouponLevel(view) {
+function setCouponLevel(view, btn) {
   S.couponView = view;
+  if (btn) {
+    document.querySelectorAll('#couponAmzLevel .lvl-pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
   applyCouponControls();
   renderCouponPage();
 }
 window.setCouponLevel = setCouponLevel;
+
+function setCouponShopLevel(view, btn) {
+  S.couponShopLevel = view;
+  if (btn) {
+    document.querySelectorAll('#couponShopLevelWrap .lvl-pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  renderCouponPage();
+}
+window.setCouponShopLevel = setCouponShopLevel;
 
 // ── Main render dispatcher ────────────────────────────────────────────────────
 
@@ -405,7 +419,7 @@ async function loadCouponShopData() {
 }
 
 function getCouponShopFiltered() {
-  const level = (document.getElementById('couponShopLevel') || {}).value || 'sku';
+  const level = S.couponShopLevel || 'sku';
   const scope = (document.getElementById('couponShopScope') || {}).value || 'target';
   const query = String(((document.getElementById('couponShopSearch') || {}).value || '')).trim().toLowerCase();
   let rows = level === 'sku' ? (S.couponShopSku || []) : (S.couponShopOrder || []);
@@ -447,7 +461,7 @@ function cpShopSummary() {
 
 function renderCouponShopify() {
   cpShopSummary();
-  const level = (document.getElementById('couponShopLevel') || {}).value || 'sku';
+  const level = S.couponShopLevel || 'sku';
   const sortBy  = (document.getElementById('couponShopSort') || {}).value || 'profit';
   const sortDir = (document.getElementById('couponShopDir')  || {}).value || 'desc';
   const searchRaw = String(((document.getElementById('couponShopSearch') || {}).value || '')).trim();
