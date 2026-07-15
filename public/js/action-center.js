@@ -194,7 +194,7 @@ function acPlatPill(platform) {
 // ── Data load (parallel, fills any missing dataset) ───────────────────────────
 
 // Column counts per level — keep in sync with the header builders below.
-const AC_COLS_BY_LEVEL = { order: 11, sku: 12, inv: 9, restock: 10 };
+const AC_COLS_BY_LEVEL = { order: 11, sku: 13, inv: 9, restock: 10 };
 function acColspan() { return AC_COLS_BY_LEVEL[S.acLevel || 'order'] || 11; }
 
 function acRenderLoading() {
@@ -480,7 +480,7 @@ function acBuildInsights() {
 const AC_ORDER_COLS = ['CAUSE', 'ORDER_ID', 'SKU', 'PLATFORM', 'ORDER_DATE', 'QTY',
   'PRODUCT_SALES', 'SALES_MARGIN', 'UNIT_COST', 'DROPSHIP_FEE', 'SHIPPING_FEE', 'COUPON_FEE',
   'PRE_FEE_PROFIT', 'PROFIT'];
-const AC_SKU_COLS = ['CAUSE', 'SKU', 'PLATFORM', 'ORDER_PROFIT', 'NET_PROFIT',
+const AC_SKU_COLS = ['CAUSE', 'SKU', 'PLATFORM', 'SUPPLIER', 'ORDER_PROFIT', 'NET_PROFIT',
   'ORDER_PRODUCT_SALES', 'NET_PRODUCT_SALES', 'ORDER_MARGIN', 'NET_MARGIN',
   'ORDER_QTY', 'NET_QTY', 'UNIT_COST', 'RETURN_RATE', 'COUPON_FEE',
   'PRE_COUPON_PROFIT', 'PROFIT', 'CURRENT_PRICE', 'REPRICED',
@@ -504,7 +504,7 @@ function acSkuCsvRow(i) {
   if (i.skuKind === 'coupon') {
     // Coupon aggregates are order-side (pre-refund) values → ORDER_* columns.
     return {
-      CAUSE: i.cause, SKU: i.sku, PLATFORM: i.platform,
+      CAUSE: i.cause, SKU: i.sku, PLATFORM: i.platform, SUPPLIER: acManu(i.sku),
       ORDER_PROFIT: acRound(i.profit), NET_PROFIT: '',
       ORDER_PRODUCT_SALES: acRound(i.productSales), NET_PRODUCT_SALES: '',
       ORDER_MARGIN: acRound(i.salesMargin), NET_MARGIN: '',
@@ -515,7 +515,7 @@ function acSkuCsvRow(i) {
   }
   const st = i.cause === 'PRICING' && i.orderQty > 0 ? acRepriceState(i) : null;
   return {
-    CAUSE: i.cause, SKU: i.sku, PLATFORM: i.platform,
+    CAUSE: i.cause, SKU: i.sku, PLATFORM: i.platform, SUPPLIER: acManu(i.sku),
     ORDER_PROFIT: acRound(i.orderProfit), NET_PROFIT: acRound(i.netProfit),
     ORDER_PRODUCT_SALES: acRound(i.orderSales), NET_PRODUCT_SALES: acRound(i.netSales),
     ORDER_MARGIN: acRound(i.orderMargin), NET_MARGIN: acRound(i.netMargin),
@@ -541,6 +541,24 @@ function acDownload(level) {
   }
 }
 window.acDownload = acDownload;
+
+// Supplier filter (SKU level). Options come from the current SKU-level insight
+// list so counts match what's on screen; '__unknown__' = no MASTER_COST supplier.
+function acManuOpts() {
+  const list = (S._acInsights || acBuildInsights()).filter(i => i.level === 'sku');
+  const set = new Set(); let hasUnknown = false;
+  list.forEach(i => { const m = acManu(i.sku); if (m) set.add(m); else hasUnknown = true; });
+  const cur = S.acManu || '';
+  const opts = [`<option value="">All suppliers</option>`]
+    .concat([...set].sort().map(m => `<option value="${m.replace(/"/g, '&quot;')}"${cur === m ? ' selected' : ''}>${m}</option>`));
+  if (hasUnknown) opts.push(`<option value="__unknown__"${cur === '__unknown__' ? ' selected' : ''}>Unknown</option>`);
+  return opts.join('');
+}
+function acManuChanged() {
+  S.acManu = (document.getElementById('acManuSel') || {}).value || '';
+  acRenderBody();
+}
+window.acManuChanged = acManuChanged;
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
@@ -588,6 +606,7 @@ function acSkuHead() {
     <th style="text-align:left;">Cause</th>
     <th style="text-align:left;">SKU</th>
     <th style="text-align:left;">Platform</th>
+    <th style="text-align:left;">Supplier</th>
     <th>Inventory</th>
     <th>Product Sales</th>
     <th>Sales Margin</th>
@@ -657,6 +676,7 @@ function acSkuTr(i) {
     <td style="text-align:left;"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}"${badgeTip}>${AC.CAUSE_LABEL[i.cause] || i.cause}</span></td>
     <td style="text-align:left;"><span class="ac-skubig">${i.sku || '—'}</span></td>
     <td style="text-align:left;">${acPlatPill(i.platform) || acDash}</td>
+    <td style="text-align:left;">${typeof manufacturerChip === 'function' ? manufacturerChip(acManu(i.sku)) : (acManu(i.sku) || acDash)}</td>
     ${invCell}
     ${acDualCell(i.orderSales, coupon ? i.productSales : i.netSales, true, coupon)}
     ${acDualCell(i.orderMargin, coupon ? i.salesMargin : i.netMargin, true, coupon)}
@@ -679,6 +699,26 @@ function acSkuTr(i) {
 //            tomorrow).
 //   Shopify: no snapshot table — lazily fetch the live variant price for the
 //            PRICING rows only (concurrency 5), then re-render once.
+
+// ── Supplier (manufacturer) lookup ────────────────────────────────────────────
+// Same source as the Inventory page: INVENTORY_FORECAST.MANUFACTURER (MASTER_COST
+// SUPPLIER + name heuristics, computed in RUN_INVENTORY_FORECAST). The forecast
+// data is already fetched for the Restock tab, so this is a free lookup: index
+// recursively-cleaned SKU -> manufacturer.
+function acManuIdx() {
+  // don't cache until the forecast data has actually arrived
+  if (S._acManuIdx && S._acManuIdx.__ready) return S._acManuIdx;
+  const idx = {};
+  if (Array.isArray(S.inventoryForecast) && S.inventoryForecast.length) idx.__ready = 1;
+  (S.inventoryForecast || []).forEach(r => {
+    const m = String(r.MANUFACTURER || '').trim();
+    if (!m) return;
+    const k = acPriceKey(r.ORIGINAL_SKU);
+    if (k && !(k in idx)) idx[k] = m;
+  });
+  return (S._acManuIdx = idx);
+}
+function acManu(sku) { return acManuIdx()[acPriceKey(sku)] || ''; }
 
 function acPriceKey(sku) {
   // The price API cleans SKUs with the RECURSIVE form ((…))+$, so strip
@@ -981,6 +1021,7 @@ function renderActionCenterPage() {
           <input id="acSearch" value="${String(S.acSearch || '').replace(/"/g, '&quot;')}" oninput="acSearchChanged()" placeholder="Search SKU…" style="${ctrl}width:150px;padding-right:22px;"/>
           <button id="acSearchClear" onclick="acClearSearch()" title="Clear" style="position:absolute;right:4px;border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;display:${S.acSearch ? '' : 'none'};">✕</button>
         </div>
+        ${level === 'sku' ? `<select id="acManuSel" onchange="acManuChanged()" style="${ctrl}">${acManuOpts()}</select>` : ''}
         <select id="acSort" onchange="acSortChanged()" style="${ctrl}">${sortOpts}</select>
         <button class="dl-btn" onclick="acDownload('order')" title="Download all order-level insights (ignores the cause filter)">${dlIcon} Order CSV</button>
         <button class="dl-btn" onclick="acDownload('sku')" title="Download all SKU-level insights (ignores the cause filter)">${dlIcon} SKU CSV</button>
@@ -1007,6 +1048,11 @@ function acRenderBody() {
   const fullList = insights.filter(i => i.level === level);
 
   let list = S.acCause ? fullList.filter(i => i.cause === S.acCause) : fullList;
+  if (level === 'sku' && S.acManu) {
+    list = S.acManu === '__unknown__'
+      ? list.filter(i => !acManu(i.sku))
+      : list.filter(i => acManu(i.sku) === S.acManu);
+  }
   const q = String(S.acSearch || '').trim().toLowerCase();
   if (q) list = list.filter(i => String(i.sku || '').toLowerCase().includes(q) || String(i.orderId || '').toLowerCase().includes(q));
 
@@ -1023,12 +1069,12 @@ function acRenderBody() {
   list = [...list].sort(cmp);
 
   const cnt = document.getElementById('acResultCount');
-  if (cnt) cnt.textContent = `${list.length}${(S.acCause || q) ? ` / ${fullList.length}` : ''}`;
+  if (cnt) cnt.textContent = `${list.length}${(S.acCause || q || S.acManu) ? ` / ${fullList.length}` : ''}`;
 
   if (!list.length) {
     const noun = level === 'order' ? 'orders' : 'SKUs';
     const msg = q ? `No ${noun} matching "${S.acSearch}"` : (S.acCause ? `No ${S.acCause} ${noun}` : `No loss-making ${noun} 🎉`);
-    bodyEl.innerHTML = `<tr><td colspan="${level === 'order' ? 11 : 12}" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    bodyEl.innerHTML = `<tr><td colspan="${level === 'order' ? 11 : 13}" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
   bodyEl.innerHTML = list.map(level === 'order' ? acOrderTr : acSkuTr).join('');
