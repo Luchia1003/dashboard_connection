@@ -33,9 +33,18 @@ module.exports = async function handler(req, res) {
   const conn = getConnection();
   try {
     await new Promise((resolve, reject) => conn.connect(err => err ? reject(err) : resolve()));
+    // ?suppliers=1 → lightweight SKU→supplier map straight from MASTER_COST
+    // (Action Center supplier column; the forecast table only covers SKUs with
+    // recent activity, so it can't be the only source).
+    const sqlText = req.query && req.query.suppliers
+      ? `SELECT UPPER(TRIM(SKU)) AS SKU, MAX(NULLIF(TRIM(SUPPLIER),'')) AS SUPPLIER
+         FROM SKU_PROFIT_PROJECT.AMAZON_MART.MASTER_COST
+         WHERE SUPPLIER IS NOT NULL AND TRIM(SUPPLIER) <> ''
+         GROUP BY 1`
+      : `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.SKU_SUMMARY_METRICS ORDER BY DATE ASC`;
     const rows = await new Promise((resolve, reject) => {
       conn.execute({
-        sqlText: `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.SKU_SUMMARY_METRICS ORDER BY DATE ASC`,
+        sqlText,
         complete: (err, stmt, rows) => err ? reject(err) : resolve(rows),
       });
     });

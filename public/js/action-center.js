@@ -230,6 +230,7 @@ async function loadActionCenterData() {
     // Inventory pool (current stock) + forecast (restock signal) — supplementary.
     if (!Array.isArray(S.inventoryPool))     jobs.push(acFetchJSON('/api/inventory-pool').then(d => { S.inventoryPool = d; }).catch(() => { S.inventoryPool = []; }));
     if (!Array.isArray(S.inventoryForecast)) jobs.push(acFetchJSON('/api/inventory-forecast').then(d => { S.inventoryForecast = d; }).catch(() => { S.inventoryForecast = []; }));
+    if (!Array.isArray(S.supplierMap))       jobs.push(acFetchJSON('/api/sku?suppliers=1').then(d => { S.supplierMap = d; }).catch(() => { S.supplierMap = []; }));
     // Amazon ⟷ supplier master inventory reconciliation (Inventory Check tab).
     if (!Array.isArray(S.invRecon)) jobs.push(acFetchJSON('/api/inventory-reconciliation').then(d => { S.invRecon = d; }).catch(() => { S.invRecon = []; }));
     await Promise.all(jobs);
@@ -706,10 +707,21 @@ function acSkuTr(i) {
 // data is already fetched for the Restock tab, so this is a free lookup: index
 // recursively-cleaned SKU -> manufacturer.
 function acManuIdx() {
-  // don't cache until the forecast data has actually arrived
+  // don't cache until the data has actually arrived
   if (S._acManuIdx && S._acManuIdx.__ready) return S._acManuIdx;
   const idx = {};
-  if (Array.isArray(S.inventoryForecast) && S.inventoryForecast.length) idx.__ready = 1;
+  if ((Array.isArray(S.inventoryForecast) && S.inventoryForecast.length) ||
+      (Array.isArray(S.supplierMap) && S.supplierMap.length)) idx.__ready = 1;
+  // base layer: MASTER_COST supplier map (covers every SKU that has a supplier,
+  // not just the recently-active ones in the forecast)
+  (S.supplierMap || []).forEach(r => {
+    const m = String(r.SUPPLIER || '').trim();
+    if (!m) return;
+    const k = acPriceKey(r.SKU);
+    if (k && !(k in idx)) idx[k] = m;
+  });
+  // forecast layer on top: adds name/SKU-heuristic attribution for SKUs whose
+  // MASTER_COST row has no supplier
   (S.inventoryForecast || []).forEach(r => {
     const m = String(r.MANUFACTURER || '').trim();
     if (!m) return;
