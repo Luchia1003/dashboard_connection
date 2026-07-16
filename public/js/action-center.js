@@ -194,7 +194,7 @@ function acPlatPill(platform) {
 // ── Data load (parallel, fills any missing dataset) ───────────────────────────
 
 // Column counts per level — keep in sync with the header builders below.
-const AC_COLS_BY_LEVEL = { order: 11, sku: 13, inv: 9, restock: 10 };
+const AC_COLS_BY_LEVEL = { order: 12, sku: 13, inv: 9, restock: 10 };
 function acColspan() { return AC_COLS_BY_LEVEL[S.acLevel || 'order'] || 11; }
 
 function acRenderLoading() {
@@ -478,7 +478,7 @@ function acBuildInsights() {
 
 // ── CSV download (all order-level / all SKU-level insights) ───────────────────
 
-const AC_ORDER_COLS = ['CAUSE', 'ORDER_ID', 'SKU', 'PLATFORM', 'ORDER_DATE', 'QTY',
+const AC_ORDER_COLS = ['CAUSE', 'ORDER_ID', 'SKU', 'PLATFORM', 'SUPPLIER', 'ORDER_DATE', 'QTY',
   'PRODUCT_SALES', 'SALES_MARGIN', 'UNIT_COST', 'DROPSHIP_FEE', 'SHIPPING_FEE', 'COUPON_FEE',
   'PRE_FEE_PROFIT', 'PROFIT'];
 const AC_SKU_COLS = ['CAUSE', 'SKU', 'PLATFORM', 'SUPPLIER', 'ORDER_PROFIT', 'NET_PROFIT',
@@ -491,7 +491,7 @@ const acRound = v => (v == null ? '' : Math.round(Number(v) * 100) / 100);
 
 function acOrderCsvRow(i) {
   return {
-    CAUSE: i.cause, ORDER_ID: i.orderId, SKU: i.sku, PLATFORM: i.platform,
+    CAUSE: i.cause, ORDER_ID: i.orderId, SKU: i.sku, PLATFORM: i.platform, SUPPLIER: acManu(i.sku),
     ORDER_DATE: i.orderDate || '', QTY: i.qty,
     PRODUCT_SALES: acRound(i.productSales), SALES_MARGIN: acRound(i.salesMargin),
     UNIT_COST: acRound(i.unitCost), DROPSHIP_FEE: i.dropshipFee ? acRound(i.dropshipFee) : '',
@@ -545,8 +545,8 @@ window.acDownload = acDownload;
 
 // Supplier filter (SKU level). Options come from the current SKU-level insight
 // list so counts match what's on screen; '__unknown__' = no MASTER_COST supplier.
-function acManuOpts() {
-  const list = (S._acInsights || acBuildInsights()).filter(i => i.level === 'sku');
+function acManuOpts(level) {
+  const list = (S._acInsights || acBuildInsights()).filter(i => i.level === (level || S.acLevel || 'order'));
   const set = new Set(); let hasUnknown = false;
   list.forEach(i => { const m = acManu(i.sku); if (m) set.add(m); else hasUnknown = true; });
   const cur = S.acManu || '';
@@ -592,6 +592,7 @@ function acOrderHead() {
     <th style="text-align:left;">Cause</th>
     <th style="text-align:left;">Order ID / SKU</th>
     <th style="text-align:left;">Platform</th>
+    <th style="text-align:left;">Supplier</th>
     <th>Order Date</th>
     <th>DS Fee</th>
     <th>Shipping</th>
@@ -631,6 +632,7 @@ function acOrderTr(i) {
     <td style="text-align:left;"><span class="ac-cause-badge ${AC.CAUSE_CLASS[i.cause]}">${i.cause}</span></td>
     <td style="text-align:left;"><div class="ac-orderid">${i.orderId || '—'}</div><div class="ac-skusmall">${i.sku || '—'}</div></td>
     <td style="text-align:left;">${acPlatPill(i.platform) || acDash}${missing}</td>
+    <td style="text-align:left;">${typeof manufacturerChip === 'function' ? manufacturerChip(acManu(i.sku)) : (acManu(i.sku) || acDash)}</td>
     <td class="num" style="color:var(--text2);">${i.orderDate || acDash}</td>
     <td class="num">${i.dropshipFee ? `<b style="color:#f59e0b;">${fmt(i.dropshipFee)}</b>` : acDash}</td>
     <td class="num">${i.shippingFee ? `<b style="color:var(--text2);">${fmt(i.shippingFee)}</b>` : acDash}</td>
@@ -966,7 +968,8 @@ function acSyncLevelToggle(orderN, skuN, level) {
 
 function acSetLevel(level) {
   S.acLevel = level;
-  S.acCause = '';           // reset filter — causes differ between levels
+  S.acCause = '';           // reset filters — causes/suppliers differ between levels
+  S.acManu = '';
   renderActionCenterPage();
 }
 window.acSetLevel = acSetLevel;
@@ -1033,7 +1036,7 @@ function renderActionCenterPage() {
           <input id="acSearch" value="${String(S.acSearch || '').replace(/"/g, '&quot;')}" oninput="acSearchChanged()" placeholder="Search SKU…" style="${ctrl}width:150px;padding-right:22px;"/>
           <button id="acSearchClear" onclick="acClearSearch()" title="Clear" style="position:absolute;right:4px;border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;display:${S.acSearch ? '' : 'none'};">✕</button>
         </div>
-        ${level === 'sku' ? `<select id="acManuSel" onchange="acManuChanged()" style="${ctrl}">${acManuOpts()}</select>` : ''}
+        <select id="acManuSel" onchange="acManuChanged()" style="${ctrl}">${acManuOpts(level)}</select>
         <select id="acSort" onchange="acSortChanged()" style="${ctrl}">${sortOpts}</select>
         <button class="dl-btn" onclick="acDownload('order')" title="Download all order-level insights (ignores the cause filter)">${dlIcon} Order CSV</button>
         <button class="dl-btn" onclick="acDownload('sku')" title="Download all SKU-level insights (ignores the cause filter)">${dlIcon} SKU CSV</button>
@@ -1060,7 +1063,7 @@ function acRenderBody() {
   const fullList = insights.filter(i => i.level === level);
 
   let list = S.acCause ? fullList.filter(i => i.cause === S.acCause) : fullList;
-  if (level === 'sku' && S.acManu) {
+  if (S.acManu) {
     list = S.acManu === '__unknown__'
       ? list.filter(i => !acManu(i.sku))
       : list.filter(i => acManu(i.sku) === S.acManu);
@@ -1086,7 +1089,7 @@ function acRenderBody() {
   if (!list.length) {
     const noun = level === 'order' ? 'orders' : 'SKUs';
     const msg = q ? `No ${noun} matching "${S.acSearch}"` : (S.acCause ? `No ${S.acCause} ${noun}` : `No loss-making ${noun} 🎉`);
-    bodyEl.innerHTML = `<tr><td colspan="${level === 'order' ? 11 : 13}" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    bodyEl.innerHTML = `<tr><td colspan="${level === 'order' ? 12 : 13}" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
   bodyEl.innerHTML = list.map(level === 'order' ? acOrderTr : acSkuTr).join('');
