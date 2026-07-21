@@ -234,6 +234,9 @@ async function loadActionCenterData() {
     // Amazon ⟷ supplier master inventory reconciliation (Inventory Check tab).
     if (!Array.isArray(S.invRecon)) jobs.push(acFetchJSON('/api/inventory-reconciliation').then(d => { S.invRecon = d; }).catch(() => { S.invRecon = []; }));
     await Promise.all(jobs);
+    // The coupon page may have cached a supplier index from S.supplierMap alone —
+    // rebuild it now that the forecast layer is available too.
+    S._acManuIdx = null;
     acBuildInvIndexes();
     renderActionCenterPage();
   } catch (err) {

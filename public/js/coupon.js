@@ -73,6 +73,36 @@ function cpRefundCells(r) {
           <td style="text-align:right;"><span style="${CP_V}color:#ef4444;">${fmt(rs)}</span></td>`;
 }
 
+// ── Supplier lookup ───────────────────────────────────────────────────────────
+// Same source as Action Center's loss tables: MASTER_COST supplier map
+// (/api/sku?suppliers=1) + inventory-forecast MANUFACTURER heuristics, indexed
+// by acManuIdx() in action-center.js. Fetched lazily on first coupon render.
+function cpEnsureSuppliers() {
+  if (Array.isArray(S.supplierMap) || S._cpSupLoading) return;
+  S._cpSupLoading = true;
+  fetch('/api/sku?suppliers=1')
+    .then(r => (r.ok ? r.json() : []))
+    .then(d => { S.supplierMap = Array.isArray(d) ? d : []; })
+    .catch(() => { S.supplierMap = []; })
+    .finally(() => { S._acManuIdx = null; renderCouponPage(); });
+}
+
+function cpSupplier(sku) {
+  return typeof acManu === 'function' ? acManu(sku) : '';
+}
+
+function cpSupplierCell(sku) {
+  const m = cpSupplier(sku);
+  if (typeof manufacturerChip === 'function') return `<td style="text-align:left;">${manufacturerChip(m)}</td>`;
+  return `<td style="text-align:left;">${m || '<span style="color:var(--text3);">—</span>'}</td>`;
+}
+
+// Adds a SUPPLIER column to rows for CSV downloads (used by app.js).
+function cpWithSupplier(rows) {
+  return (rows || []).map(r => Object.assign({}, r, { SUPPLIER: cpSupplier(r.SKU) }));
+}
+window.cpWithSupplier = cpWithSupplier;
+
 // ── Load (lazy, first visit only) ────────────────────────────────────────────
 
 async function loadCouponData() {
@@ -83,7 +113,7 @@ async function loadCouponData() {
 
   document.getElementById('couponHead').innerHTML = '';
   document.getElementById('couponBody').innerHTML =
-    `<tr><td colspan="16" style="text-align:center;padding:48px;color:var(--text3);">
+    `<tr><td colspan="17" style="text-align:center;padding:48px;color:var(--text3);">
        <div style="display:inline-block;width:28px;height:28px;border:2px solid var(--border);border-top-color:#0ea5e9;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px;"></div>
        <div>Loading coupon data…</div>
      </td></tr>`;
@@ -104,7 +134,7 @@ async function loadCouponData() {
     renderCouponPage();
   } catch (err) {
     document.getElementById('couponBody').innerHTML =
-      `<tr><td colspan="16" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
+      `<tr><td colspan="17" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
   }
 }
 window.loadCouponData = loadCouponData;
@@ -163,6 +193,7 @@ window.setCouponShopLevel = setCouponShopLevel;
 // ── Main render dispatcher ────────────────────────────────────────────────────
 
 function renderCouponPage() {
+  cpEnsureSuppliers();
   if ((S.couponPlatform || 'amazon') === 'shopify') {
     if (!S.couponShopSku || !S.couponShopOrder) { loadCouponShopData(); return; }
     renderCouponShopify();
@@ -193,6 +224,7 @@ function renderCouponSkuTable() {
     <tr>
       <th style="text-align:right;min-width:40px;width:40px;">#</th>
       <th style="text-align:left;min-width:130px;">SKU</th>
+      <th style="text-align:left;min-width:110px;">Supplier</th>
       <th style="min-width:100px;">Order Date</th>
       <th style="min-width:70px;">Qty</th>
       <th style="min-width:115px;">Product Sales</th>
@@ -235,7 +267,7 @@ function renderCouponSkuTable() {
 
   const tbody = document.getElementById('couponBody');
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="16" style="text-align:center;padding:40px;color:var(--text3);">${query ? `No SKUs matching "${searchRaw}"` : 'No data for selected period'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="17" style="text-align:center;padding:40px;color:var(--text3);">${query ? `No SKUs matching "${searchRaw}"` : 'No data for selected period'}</td></tr>`;
     return;
   }
 
@@ -251,6 +283,7 @@ function renderCouponSkuTable() {
     <tr>
       <td style="text-align:right;font-size:12px;color:var(--text3);">${i + 1}</td>
       <td style="text-align:left;font-weight:700;color:var(--text);font-size:14px;">${r.SKU || '—'}${cpDsBadge(r)}</td>
+      ${cpSupplierCell(r.SKU)}
       <td style="text-align:right;font-size:12px;color:var(--text2);">${String(r.ORDER_DATE || '—').slice(0, 10)}</td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${Math.round(Number(r.ORDER_QTY) || 0).toLocaleString()}</span></td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmt(Number(r.ORDER_PRODUCT_SALES) || 0)}</span></td>
@@ -287,6 +320,7 @@ function renderCouponOrderTable() {
       <th style="text-align:right;min-width:40px;width:40px;">#</th>
       <th style="text-align:left;min-width:185px;">Order ID</th>
       <th style="text-align:left;min-width:130px;">SKU</th>
+      <th style="text-align:left;min-width:110px;">Supplier</th>
       <th style="min-width:100px;">Order Date</th>
       <th style="min-width:60px;">Qty</th>
       <th style="min-width:115px;">Product Sales</th>
@@ -330,7 +364,7 @@ function renderCouponOrderTable() {
 
   const tbody = document.getElementById('couponBody');
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="16" style="text-align:center;padding:40px;color:var(--text3);">${query ? `No orders matching "${searchRaw}"` : 'No data for selected period'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="17" style="text-align:center;padding:40px;color:var(--text3);">${query ? `No orders matching "${searchRaw}"` : 'No data for selected period'}</td></tr>`;
     return;
   }
 
@@ -345,6 +379,7 @@ function renderCouponOrderTable() {
       <td style="text-align:right;font-size:12px;color:var(--text3);">${i + 1}</td>
       <td style="text-align:left;font-size:12px;color:var(--text2);font-family:monospace;">${r.ORDER_ID || '—'}</td>
       <td style="text-align:left;font-weight:700;font-size:13px;color:var(--text);">${r.SKU || '—'}${cpDsBadge(r)}</td>
+      ${cpSupplierCell(r.SKU)}
       <td style="text-align:right;font-size:12px;color:var(--text2);">${String(r.ORDER_DATE || '—').slice(0, 10)}</td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${Math.round(Number(r.ORDER_QTY) || 0).toLocaleString()}</span></td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmt(Number(r.ORDER_PRODUCT_SALES) || 0)}</span></td>
@@ -513,6 +548,7 @@ function renderCouponShopSkuTable(rows, searchRaw) {
     <tr>
       <th style="text-align:right;min-width:40px;width:40px;">#</th>
       <th style="text-align:left;min-width:150px;">SKU</th>
+      <th style="text-align:left;min-width:110px;">Supplier</th>
       <th style="min-width:75px;">Discount</th>
       <th style="min-width:100px;">Price @ Push</th>
       <th style="min-width:95px;">Unit Cost</th>
@@ -527,7 +563,7 @@ function renderCouponShopSkuTable(rows, searchRaw) {
     </tr>`;
   const tbody = document.getElementById('couponBody');
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text3);">${searchRaw ? `No SKUs matching "${searchRaw}"` : 'No SKUs in scope'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--text3);">${searchRaw ? `No SKUs matching "${searchRaw}"` : 'No SKUs in scope'}</td></tr>`;
     return;
   }
   const V = CP_V;
@@ -539,6 +575,7 @@ function renderCouponShopSkuTable(rows, searchRaw) {
     <tr>
       <td style="text-align:right;font-size:12px;color:var(--text3);">${i + 1}</td>
       <td style="text-align:left;font-weight:700;color:var(--text);font-size:14px;">${r.SKU || '—'} ${cpShopBadges(r)}</td>
+      ${cpSupplierCell(r.SKU)}
       <td style="text-align:right;font-size:12px;color:var(--text2);">${Math.round(Number(r.GROUP_PCT) || 0)}%</td>
       <td style="text-align:right;"><span style="${V}color:var(--text2);">${fmt(Number(r.PRICE_AT_PUSH) || 0)}</span></td>
       <td style="text-align:right;">${r.UNIT_COST == null ? '<span style="color:var(--text3);">—</span>' : `<span style="${V}color:var(--text2);">${fmt(Number(r.UNIT_COST))}</span>`}</td>
@@ -561,6 +598,7 @@ function renderCouponShopOrderTable(rows, searchRaw) {
       <th style="text-align:left;min-width:110px;">Order</th>
       <th style="min-width:100px;">Order Date</th>
       <th style="text-align:left;min-width:150px;">SKU</th>
+      <th style="text-align:left;min-width:110px;">Supplier</th>
       <th style="min-width:60px;">Qty</th>
       <th style="min-width:90px;">Price</th>
       <th style="min-width:110px;">Est Coupon $</th>
@@ -571,7 +609,7 @@ function renderCouponShopOrderTable(rows, searchRaw) {
     </tr>`;
   const tbody = document.getElementById('couponBody');
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text3);">${searchRaw ? `No orders matching "${searchRaw}"` : `No coupon orders yet — accumulating since ${CP_SHOP_START}`}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text3);">${searchRaw ? `No orders matching "${searchRaw}"` : `No coupon orders yet — accumulating since ${CP_SHOP_START}`}</td></tr>`;
     return;
   }
   const V = CP_V;
@@ -584,6 +622,7 @@ function renderCouponShopOrderTable(rows, searchRaw) {
       <td style="text-align:left;font-size:12px;color:var(--text2);font-family:monospace;">${r.ORDER_NAME || r.ORDER_ID || '—'}</td>
       <td style="text-align:right;font-size:12px;color:var(--text2);">${String(r.ORDER_DATE || '—').slice(0, 10)}</td>
       <td style="text-align:left;font-weight:700;font-size:13px;color:var(--text);">${r.SKU || '—'} ${cpShopBadges(r)}</td>
+      ${cpSupplierCell(r.SKU)}
       <td style="text-align:right;"><span style="${V}color:var(--text);">${Math.round(Number(r.ORDER_QTY) || 0).toLocaleString()}</span></td>
       <td style="text-align:right;"><span style="${V}color:var(--text2);">${fmt(Number(r.PRICE) || 0)}</span></td>
       <td style="text-align:right;"><span style="${V}color:#f59e0b;">${fmt(Number(r.EST_COUPON_DISCOUNT) || 0)}</span></td>

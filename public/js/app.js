@@ -189,7 +189,8 @@ function downloadCouponCSV() {
     const rows = typeof getCouponShopFiltered === 'function' ? getCouponShopFiltered() : [];
     if (!rows.length) { alert('No rows match the current Shopify coupon filters.'); return; }
     const lvl = S.couponShopLevel || 'sku';
-    downloadCSV(rows, `shopify_coupon_${lvl}_level_${todayStamp()}.csv`);
+    downloadCSV(typeof cpWithSupplier === 'function' ? cpWithSupplier(rows) : rows,
+      `shopify_coupon_${lvl}_level_${todayStamp()}.csv`);
     return;
   }
   if (!S.couponSku || !S.couponOrder) { loadCouponData(); return; }
@@ -203,7 +204,8 @@ function downloadCouponCSV() {
   if (q) rows = rows.filter(r => String(r.SKU || '').toLowerCase().includes(q)
     || (!isSku && String(r.ORDER_ID || '').toLowerCase().includes(q)));
   if (!rows.length) { alert('No rows match the current coupon filters.'); return; }
-  downloadCSV(rows, `${isSku ? 'sku' : 'order'}_level_coupon_order_${dateLabel}_${todayStamp()}.csv`);
+  downloadCSV(typeof cpWithSupplier === 'function' ? cpWithSupplier(rows) : rows,
+    `${isSku ? 'sku' : 'order'}_level_coupon_order_${dateLabel}_${todayStamp()}.csv`);
 }
 
 // Coupon Order → previous FULL month (e.g. in July this downloads all of June).
@@ -231,7 +233,8 @@ async function downloadCouponPrevMonthCSV() {
       return d > m ? d : m;
     }, '');
     const lvl = (S.couponView || 'sku') === 'sku' ? 'sku_level' : 'order_level';
-    downloadCSV(rows, `${lvl}_coupon_order_${month}_full_month.csv`);
+    downloadCSV(typeof cpWithSupplier === 'function' ? cpWithSupplier(rows) : rows,
+      `${lvl}_coupon_order_${month}_full_month.csv`);
   } catch (err) {
     alert(err.message);
   } finally {
