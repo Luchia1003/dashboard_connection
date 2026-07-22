@@ -420,7 +420,7 @@ window.clearCouponOrdSearch = clearCouponOrdSearch;
 // Attribution rule: any sale of a SKU in MARKETING.COUPON_EXECUTION_LOG between
 // the batch start/end dates counts as a coupon sale. ORDER_TOTAL_DISCOUNTS is
 // the cross-check (did the order actually carry a discount). SALES_MARGIN from
-// the mart is already net of the discount, so Est Profit = margin − cost×qty.
+// the mart is already net of the discount, so Profit = margin − cost×qty (real, not est-coupon based).
 
 const CP_SHOP_START = '2026-07-14';
 
@@ -490,7 +490,7 @@ function cpShopSummary() {
     ` · units <b style="color:var(--text);">${Math.round(units).toLocaleString()}</b>` +
     ` · sales <b style="color:var(--text);">${fmt(sales)}</b>` +
     ` · est. coupon given <b style="color:#f59e0b;">${fmt(disc)}</b>` +
-    ` · est. profit <b style="color:${profit < 0 ? '#ef4444' : '#10b981'};">${fmt(profit)}</b>` +
+    ` · profit <b style="color:${profit < 0 ? '#ef4444' : '#10b981'};">${fmt(profit)}</b>` +
     (sold ? ` · SKUs with sales: <b style="color:var(--text);">${sold.toLocaleString()}</b>` : '');
 }
 
@@ -558,7 +558,7 @@ function renderCouponShopSkuTable(rows, searchRaw) {
       <th style="min-width:115px;">Product Sales</th>
       <th style="min-width:110px;">Est Coupon $</th>
       <th style="min-width:110px;">Margin</th>
-      <th style="min-width:105px;">Est Profit</th>
+      <th style="min-width:105px;">Profit</th>
       <th style="min-width:105px;">Last Order</th>
     </tr>`;
   const tbody = document.getElementById('couponBody');
@@ -605,7 +605,7 @@ function renderCouponShopOrderTable(rows, searchRaw) {
       <th style="min-width:120px;">Order Discount $</th>
       <th style="min-width:115px;">Product Sales</th>
       <th style="min-width:110px;">Margin</th>
-      <th style="min-width:105px;">Est Profit</th>
+      <th style="min-width:105px;">Profit</th>
     </tr>`;
   const tbody = document.getElementById('couponBody');
   if (!rows.length) {
