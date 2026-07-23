@@ -189,35 +189,33 @@ function renderForecastTable() {
   const channel  = (document.getElementById('forecastChannel') || {}).value || 'total';
   const status   = (document.getElementById('forecastStatus')  || {}).value || '';
   const manufacturer = (document.getElementById('forecastManufacturer') || {}).value || '';
-  const sortBy   = (document.getElementById('forecastSort')    || {}).value || 'restock_needed';
-  const sortDir  = (document.getElementById('forecastDir')     || {}).value || 'desc';
   const searchRaw = (document.getElementById('forecastSearch') || {}).value || '';
   const query    = searchRaw.trim().toLowerCase();
 
   const clrBtn = document.getElementById('forecastSearchClear');
   if (clrBtn) clrBtn.style.display = query ? '' : 'none';
 
-  // Header
+  // Header (click-to-sort; Channel is a single value per view, so not sortable)
   document.getElementById('inventoryHead').innerHTML = `
     <tr>
       <th style="text-align:right;min-width:40px;width:40px;">#</th>
-      <th style="text-align:left;min-width:200px;">SKU / Product</th>
+      ${hdrTh('if', 'sku', 'SKU / Product', { align: 'left', min: '200px' })}
       <th style="min-width:110px;">Channel</th>
-      <th style="text-align:left;min-width:110px;">Manufacturer</th>
-      <th style="min-width:90px;">Available</th>
-      <th style="min-width:110px;">Last Order</th>
-      <th style="min-width:80px;">Days Since</th>
-      <th style="min-width:80px;">Units 30d</th>
-      <th style="min-width:80px;">Units 60d</th>
-      <th style="min-width:80px;">Units 90d</th>
-      <th style="min-width:80px;">ADU 30d</th>
-      <th style="min-width:100px;">FC 60d</th>
-      <th style="min-width:110px;">Restock Need</th>
-      <th style="min-width:100px;">Profit / Unit</th>
-      <th style="min-width:120px;">Est Restock Profit</th>
-      <th style="min-width:120px;">Est Restock Cost</th>
-      <th style="min-width:90px;">Threshold</th>
-      <th style="min-width:140px;">Status</th>
+      ${hdrTh('if', 'manufacturer', 'Manufacturer', { align: 'left', min: '110px' })}
+      ${hdrTh('if', 'available', 'Available', { min: '90px' })}
+      ${hdrTh('if', 'last_order', 'Last Order', { min: '110px' })}
+      ${hdrTh('if', 'days_since_last_order', 'Days Since', { min: '80px' })}
+      ${hdrTh('if', 'units_30d', 'Units 30d', { min: '80px' })}
+      ${hdrTh('if', 'units_60d', 'Units 60d', { min: '80px' })}
+      ${hdrTh('if', 'units_90d', 'Units 90d', { min: '80px' })}
+      ${hdrTh('if', 'adu_30d', 'ADU 30d', { min: '80px' })}
+      ${hdrTh('if', 'forecast_60d', 'FC 60d', { min: '100px' })}
+      ${hdrTh('if', 'restock_needed', 'Restock Need', { min: '110px' })}
+      ${hdrTh('if', 'profit_per_unit', 'Profit / Unit', { min: '100px' })}
+      ${hdrTh('if', 'est_restock_profit', 'Est Restock Profit', { min: '120px' })}
+      ${hdrTh('if', 'est_restock_cost', 'Est Restock Cost', { min: '120px' })}
+      ${hdrTh('if', 'threshold', 'Threshold', { min: '90px' })}
+      ${hdrTh('if', 'status', 'Status', { min: '140px' })}
     </tr>`;
 
   // Filter by channel
@@ -245,8 +243,12 @@ function renderForecastTable() {
     );
   }
 
-  const sortFn = {
-    sku:                   r => String(r.ORIGINAL_SKU || ''),
+  rows = hdrSortRows(rows, 'if', {
+    sku:                   r => String(r.ORIGINAL_SKU || '').toLowerCase(),
+    manufacturer:          r => String(r.MANUFACTURER || '').toLowerCase(),
+    last_order:            r => String(r.LAST_ORDER_DATE || ''),
+    threshold:             r => String(r.RESTOCK_THRESHOLD_MET || ''),
+    status:                r => String(r.INVENTORY_STATUS || ''),
     available:             r => Number(r.AVAILABLE)            || 0,
     days_since_last_order: r => Number(r.DAYS_SINCE_LAST_ORDER) || 0,
     units_30d:             r => Number(r.UNITS_30D)            || 0,
@@ -258,13 +260,6 @@ function renderForecastTable() {
     profit_per_unit:       r => Number(r.PROFIT_PER_UNIT)      || 0,
     est_restock_profit:    r => Number(r.EST_RESTOCK_PROFIT)   || 0,
     est_restock_cost:      r => Number(r.EST_RESTOCK_COST)     || 0,
-  }[sortBy] || (r => Number(r.RESTOCK_NEEDED) || 0);
-
-  rows.sort((a, b) => {
-    const va = sortFn(a), vb = sortFn(b);
-    if (va < vb) return sortDir === 'asc' ? -1 : 1;
-    if (va > vb) return sortDir === 'asc' ?  1 : -1;
-    return 0;
   });
 
   // Meta
@@ -340,8 +335,6 @@ function renderForecastTable() {
 function renderAgingTable() {
   const chanFilter = (document.getElementById('agingChannel')  || {}).value || '';
   const priority   = (document.getElementById('agingPriority') || {}).value || '';
-  const sortBy     = (document.getElementById('agingSort')     || {}).value || 'days_since_last_order';
-  const sortDir    = (document.getElementById('agingDir')      || {}).value || 'asc';
   const searchRaw  = (document.getElementById('agingSearch')   || {}).value || '';
   const query      = searchRaw.trim().toLowerCase();
 
@@ -351,16 +344,16 @@ function renderAgingTable() {
   document.getElementById('inventoryHead').innerHTML = `
     <tr>
       <th style="text-align:right;min-width:40px;width:40px;">#</th>
-      <th style="text-align:left;min-width:200px;">SKU / Product</th>
-      <th style="min-width:140px;">Warehouse</th>
-      <th style="min-width:90px;">Available</th>
-      <th style="min-width:90px;">Unit Cost</th>
-      <th style="min-width:110px;">Capital Stuck</th>
-      <th style="min-width:100px;">Profit / Unit</th>
-      <th style="min-width:150px;">Last Order</th>
-      <th style="min-width:90px;">Days Since</th>
-      <th style="min-width:110px;">Lifetime Sold</th>
-      <th style="min-width:240px;">Review Priority</th>
+      ${hdrTh('ia', 'sku', 'SKU / Product', { align: 'left', min: '200px' })}
+      ${hdrTh('ia', 'warehouse', 'Warehouse', { min: '140px' })}
+      ${hdrTh('ia', 'available', 'Available', { min: '90px' })}
+      ${hdrTh('ia', 'unit_cost', 'Unit Cost', { min: '90px' })}
+      ${hdrTh('ia', 'capital_stuck', 'Capital Stuck', { min: '110px' })}
+      ${hdrTh('ia', 'profit_per_unit', 'Profit / Unit', { min: '100px' })}
+      ${hdrTh('ia', 'last_order', 'Last Order', { min: '150px' })}
+      ${hdrTh('ia', 'days_since_last_order', 'Days Since', { min: '90px' })}
+      ${hdrTh('ia', 'lifetime_units_sold', 'Lifetime Sold', { min: '110px' })}
+      ${hdrTh('ia', 'priority', 'Review Priority', { min: '240px' })}
     </tr>`;
 
   let rows = [...(S.fbaAging || [])];
@@ -380,21 +373,17 @@ function renderAgingTable() {
     );
   }
 
-  const sortFn = {
-    sku:                   r => String(r.ORIGINAL_SKU || ''),
+  rows = hdrSortRows(rows, 'ia', {
+    sku:                   r => String(r.ORIGINAL_SKU || '').toLowerCase(),
+    warehouse:             r => String(r.CHANNEL || '').toLowerCase(),
+    last_order:            r => String(r.LAST_ORDER_DATE || ''),
+    priority:              r => String(r.REVIEW_PRIORITY || ''),
     available:             r => Number(r.AVAILABLE)            || 0,
     lifetime_units_sold:   r => Number(r.LIFETIME_UNITS_SOLD)  || 0,
     days_since_last_order: r => Number(r.DAYS_SINCE_LAST_ORDER) || 0,
     unit_cost:             r => Number(r.UNIT_COST)            || 0,
     capital_stuck:         r => Number(r.CAPITAL_STUCK)        || 0,
     profit_per_unit:       r => Number(r.PROFIT_PER_UNIT)      || 0,
-  }[sortBy] || (r => Number(r.DAYS_SINCE_LAST_ORDER) || 0);
-
-  rows.sort((a, b) => {
-    const va = sortFn(a), vb = sortFn(b);
-    if (va < vb) return sortDir === 'asc' ? -1 : 1;
-    if (va > vb) return sortDir === 'asc' ?  1 : -1;
-    return 0;
   });
 
   const meta = document.getElementById('inventoryMeta');

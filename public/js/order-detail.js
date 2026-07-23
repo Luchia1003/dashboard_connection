@@ -104,13 +104,29 @@ function renderOrderDetailPage() {
   if (!S.orderDetail) { loadOrderDetailData(); return; }
   if (typeof updateDownloadHints === 'function') updateDownloadHints();
 
-  const sortBy    = (document.getElementById('orderDetailSort') || {}).value || 'order_date';
-  const sortDir   = (document.getElementById('orderDetailDir')  || {}).value || 'desc';
   const searchRaw = (document.getElementById('orderDetailSearch') || {}).value || '';
   const query     = searchRaw.trim().toLowerCase();
 
   const clrBtn = document.getElementById('orderDetailSearchClear');
   if (clrBtn) clrBtn.style.display = query ? '' : 'none';
+
+  // Header (click-to-sort)
+  document.getElementById('orderDetailHead').innerHTML = `
+    <tr>
+      <th style="text-align:right;min-width:40px;width:40px;">#</th>
+      ${hdrTh('od', 'order_id', 'Order ID', { align: 'left', min: '190px' })}
+      ${hdrTh('od', 'sku', 'SKU', { align: 'left', min: '130px' })}
+      ${hdrTh('od', 'platform', 'Platform', { min: '90px' })}
+      ${hdrTh('od', 'dropship', 'Drop Ship', { min: '100px' })}
+      ${hdrTh('od', 'ds_fee', 'DS Fee', { min: '110px' })}
+      ${hdrTh('od', 'shipping', 'Shipping', { min: '110px' })}
+      ${hdrTh('od', 'order_date', 'Order Date', { min: '100px' })}
+      ${hdrTh('od', 'qty', 'Qty', { min: '70px' })}
+      ${hdrTh('od', 'product_sales', 'Product Sales', { min: '120px' })}
+      ${hdrTh('od', 'sales_margin', 'Sales Margin', { min: '120px' })}
+      ${hdrTh('od', 'unit_cost', 'Unit Cost', { min: '110px' })}
+      ${hdrTh('od', 'profit', 'Profit', { min: '120px' })}
+    </tr>`;
 
   let rows = getOrderDetailFiltered();
 
@@ -121,21 +137,19 @@ function renderOrderDetailPage() {
     );
   }
 
-  const sortFn = {
-    order_date:    r => String(r.ORDER_DATE    || ''),
-    sku:           r => String(r.SKU           || ''),
+  rows = hdrSortRows(rows, 'od', {
+    order_date:    r => String(r.ORDER_DATE || ''),
+    order_id:      r => String(r.ORDER_ID   || '').toLowerCase(),
+    sku:           r => String(r.SKU        || '').toLowerCase(),
+    platform:      r => String(r.PLATFORM   || '').toLowerCase(),
+    dropship:      r => (isDropShip(r) ? 1 : 0),
+    ds_fee:        r => Number(r.DROPSHIP_FEE)  || 0,
+    shipping:      r => Number(r.SHIPPING_FEE)  || 0,
     qty:           r => Number(r.QTY)           || 0,
     product_sales: r => Number(r.PRODUCT_SALES) || 0,
     sales_margin:  r => Number(r.SALES_MARGIN)  || 0,
     unit_cost:     r => Number(r.UNIT_COST)     || 0,
     profit:        r => Number(r.PROFIT)        || 0,
-  }[sortBy] || (r => String(r.ORDER_DATE || ''));
-
-  rows.sort((a, b) => {
-    const va = sortFn(a), vb = sortFn(b);
-    if (va < vb) return sortDir === 'asc' ? -1 : 1;
-    if (va > vb) return sortDir === 'asc' ?  1 : -1;
-    return 0;
   });
 
   const tbody = document.getElementById('orderDetailBody');

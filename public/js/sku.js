@@ -157,9 +157,7 @@ window.getTopN = getTopN;
 // and the CSV export so both show exactly the same SKUs.
 function selectSkus(filteredData, fullData) {
   const f      = fields(S.mode);
-  const metric = (document.getElementById('sortMetric') || {}).value || 'revenue';
   const period = (document.getElementById('sortPeriod') || {}).value || 'total';
-  const dir    = (document.getElementById('sortDir')    || {}).value || 'desc';
   const topN   = getTopN();
 
   const searchRaw = (document.getElementById('skuSearch') || {}).value || '';
@@ -192,8 +190,10 @@ function selectSkus(filteredData, fullData) {
     );
   }
 
-  // Sort: use PERIOD TOTALS for rolling (absolute value), not daily avg
-  function getSortVal(s) {
+  // Sort (click-to-sort headers): use PERIOD TOTALS for rolling (absolute
+  // value), not daily avg. The "Sort basis" dropdown picks Value vs Rolling %.
+  function getSortVal(s, metric) {
+    if (metric === 'sku') return s.sku.toLowerCase();
     // Inventory is a current snapshot — no rolling concept, sort by total stock
     // under the active platform view regardless of the period selector.
     if (metric === 'inventory') {
@@ -214,10 +214,10 @@ function selectSkus(filteredData, fullData) {
     const base = r[aKey];
     return (base && base !== 0) ? (r[pKey] - base) / Math.abs(base) : 0;
   }
-  skus.sort((a, b) => {
-    const diff = getSortVal(b) - getSortVal(a);
-    return dir === 'asc' ? -diff : diff;
-  });
+  const PD_FNS = {};
+  ['sku', 'revenue', 'profit', 'orders', 'margin', 'returnRate', 'inventory']
+    .forEach(m => { PD_FNS[m] = s => getSortVal(s, m); });
+  skus = hdrSortRows(skus, 'pd', PD_FNS);
 
   // Search shows every match; otherwise cap at the Show limit.
   const visible = query ? skus : skus.slice(0, topN);
@@ -231,7 +231,17 @@ function renderSKUTable(filteredData, fullData) {
   const clearBtn = document.getElementById('skuSearchClear');
   if (clearBtn) clearBtn.style.display = query ? '' : 'none';
 
-  document.getElementById('returnHeader').style.display = f.showRet ? '' : 'none';
+  // Header (click-to-sort). Return Rate column only exists in Net mode.
+  document.getElementById('skuHead').innerHTML = `
+    <tr>
+      ${hdrTh('pd', 'sku', '# SKU / Product', { align: 'left', min: '220px' })}
+      ${hdrTh('pd', 'revenue', 'Revenue', { min: '140px' })}
+      ${hdrTh('pd', 'profit', 'Profit', { min: '140px' })}
+      ${hdrTh('pd', 'orders', 'Qty', { min: '120px' })}
+      ${hdrTh('pd', 'margin', 'Margin <span style="font-size:10px;font-weight:400;color:var(--text3);white-space:nowrap;">(% = margin ÷ revenue)</span>', { min: '150px' })}
+      ${f.showRet ? hdrTh('pd', 'returnRate', 'Return Rate', { min: '110px' }) : ''}
+      ${hdrTh('pd', 'inventory', 'Inventory', { min: '120px' })}
+    </tr>`;
 
   const tbody = document.getElementById('skuBody');
   if (!visible.length) {
@@ -250,8 +260,8 @@ function renderSKUTable(filteredData, fullData) {
         </div>
         ${s.retAlert === 'danger' ? `<div style="margin-top:4px;"><span class="badge-down" style="font-size:9px;padding:1px 5px;border-radius:10px;">⚠ Abnormal</span></div>` : ''}
         ${s.retAlert === 'warn'   ? `<div style="margin-top:4px;"><span class="badge-surge" style="font-size:9px;padding:1px 5px;border-radius:10px;">High</span></div>` : ''}
-      </td>` : '';  // emit no cell when hidden, so the header (returnHeader is
-                    // display:none in Order/Refund) and body stay column-aligned
+      </td>` : '';  // emit no cell when hidden — the header th is likewise
+                    // omitted in Order/Refund mode, keeping columns aligned
 
     // Inventory — current snapshot per the active platform view (not time-range
     // dependent). Amazon / All show an FBA · warehouse split underneath.

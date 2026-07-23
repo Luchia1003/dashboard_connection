@@ -577,24 +577,12 @@
         </div>
         <div style="width:1px;height:22px;background:var(--border);"></div>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span style="font-size:12px;color:var(--text3);">Sort</span>
-          <select id="sortMetric" class="ctrl-sel" onchange="renderProductsPage()">
-            <option value="revenue">Revenue</option>
-            <option value="profit">Profit</option>
-            <option value="orders">Qty/Orders</option>
-            <option value="margin">Margin $</option>
-            <option value="returnRate">Return Rate</option>
-            <option value="inventory">Inventory</option>
-          </select>
+          <span style="font-size:12px;color:var(--text3);" title="What clicking a column header sorts by: the period value itself, or the rolling trend % badge">Sort basis</span>
           <select id="sortPeriod" class="ctrl-sel" onchange="renderProductsPage()">
             <option value="total">Value</option>
             <option value="7">Rolling 7d</option>
             <option value="14">Rolling 14d</option>
             <option value="30">Rolling 30d</option>
-          </select>
-          <select id="sortDir" class="ctrl-sel" onchange="renderProductsPage()">
-            <option value="desc">High → Low</option>
-            <option value="asc">Low → High</option>
           </select>
         </div>
         <div style="display:flex;align-items:center;gap:7px;">
@@ -616,8 +604,12 @@
           <input id="skuSearch" type="text" class="ctrl-inp" placeholder="Search SKU…" style="width:140px;" oninput="renderProductsPage()" />
           <button id="skuSearchClear" onclick="clearSkuSearch()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px;" title="Clear">✕</button>
         </div>
+        <!-- Sort affordance hint (headers are click-to-sort) -->
+        <span style="margin-left:auto;font-size:11px;color:var(--text3);white-space:nowrap;"
+          title="Click any column header to sort. Click again to flip direction. Hold Shift and click a second column to sort within the first.">
+          ⇅ Click header to sort · <b style="color:var(--text2);">Shift+Click</b> = 2nd sort</span>
         <!-- CSV download (right side) -->
-        <div class="dl-wrap" style="margin-left:auto;">
+        <div class="dl-wrap" style="margin-left:12px;">
           <button class="dl-btn" onclick="downloadSkuCSV()" title="Download Product Detail (matches current Time Range, Platform, and Net/Order/Refund)">
             <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
             CSV
@@ -634,17 +626,7 @@
       <div class="card" style="overflow:hidden;">
         <div style="overflow:auto;height:calc(100vh - 215px);">
           <table>
-            <thead style="position:sticky;top:0;z-index:10;background:var(--card);">
-              <tr>
-                <th style="text-align:left;min-width:220px;"># SKU / Product</th>
-                <th style="min-width:140px;">Revenue</th>
-                <th style="min-width:140px;">Profit</th>
-                <th style="min-width:120px;">Qty</th>
-                <th style="min-width:150px;" id="marginHeader">Margin <span style="font-size:10px;font-weight:400;color:var(--text3);white-space:nowrap;">(% = margin ÷ revenue)</span></th>
-                <th style="min-width:110px;" id="returnHeader">Return Rate</th>
-                <th style="min-width:120px;">Inventory</th>
-              </tr>
-            </thead>
+            <thead id="skuHead" style="position:sticky;top:0;z-index:10;background:var(--card);"></thead>
             <tbody id="skuBody">
               <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3);">Loading…</td></tr>
             </tbody>
@@ -675,31 +657,18 @@
           </select>
         </div>
         <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
-        <!-- Sort -->
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-size:12px;color:var(--text3);">Sort</span>
-          <select id="orderDetailSort" class="ctrl-sel" onchange="renderOrderDetailPage()">
-            <option value="order_date">Order Date</option>
-            <option value="sku">SKU</option>
-            <option value="product_sales">Product Sales</option>
-            <option value="profit">Profit</option>
-            <option value="qty">Qty</option>
-            <option value="sales_margin">Sales Margin</option>
-            <option value="unit_cost">Unit Cost</option>
-          </select>
-          <select id="orderDetailDir" class="ctrl-sel" onchange="renderOrderDetailPage()">
-            <option value="desc">Newest / High → Low</option>
-            <option value="asc">Oldest / Low → High</option>
-          </select>
-        </div>
         <!-- Search -->
         <div style="display:flex;align-items:center;gap:5px;">
           <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35"/></svg>
           <input id="orderDetailSearch" type="text" class="ctrl-inp" placeholder="Search Order ID / SKU…" style="width:180px;" oninput="renderOrderDetailPage()" />
           <button id="orderDetailSearchClear" onclick="clearOrderDetailSearch()" style="display:none;background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:0 2px;" title="Clear">✕</button>
         </div>
+        <!-- Sort affordance hint (headers are click-to-sort) -->
+        <span style="margin-left:auto;font-size:11px;color:var(--text3);white-space:nowrap;"
+          title="Click any column header to sort. Click again to flip direction. Hold Shift and click a second column to sort within the first.">
+          ⇅ Click header to sort · <b style="color:var(--text2);">Shift+Click</b> = 2nd sort</span>
         <!-- CSV download (right side) -->
-        <div class="dl-wrap" style="margin-left:auto;">
+        <div class="dl-wrap" style="margin-left:12px;">
           <button class="dl-btn" onclick="downloadOrderDetailCSV()" title="Download Order Detail (matches current Platform and Date filter)">
             <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
             CSV
@@ -712,23 +681,7 @@
       <div class="card" style="overflow:hidden;">
         <div style="overflow:auto;height:calc(100vh - 215px);">
           <table>
-            <thead style="position:sticky;top:0;z-index:10;background:var(--card);">
-              <tr>
-                <th style="text-align:right;min-width:40px;width:40px;">#</th>
-                <th style="text-align:left;min-width:190px;">Order ID</th>
-                <th style="text-align:left;min-width:130px;">SKU</th>
-                <th style="min-width:90px;">Platform</th>
-                <th style="min-width:100px;">Drop Ship</th>
-                <th style="min-width:110px;">DS Fee</th>
-                <th style="min-width:110px;">Shipping</th>
-                <th style="min-width:100px;">Order Date</th>
-                <th style="min-width:70px;">Qty</th>
-                <th style="min-width:120px;">Product Sales</th>
-                <th style="min-width:120px;">Sales Margin</th>
-                <th style="min-width:110px;">Unit Cost</th>
-                <th style="min-width:120px;">Profit</th>
-              </tr>
-            </thead>
+            <thead id="orderDetailHead" style="position:sticky;top:0;z-index:10;background:var(--card);"></thead>
             <tbody id="orderDetailBody">
               <tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text3);">Loading…</td></tr>
             </tbody>
@@ -879,25 +832,6 @@
             <option value="">All</option>
           </select>
           <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
-          <span style="font-size:12px;color:var(--text3);">Sort</span>
-          <select id="forecastSort" class="ctrl-sel" onchange="renderInventoryPage()">
-            <option value="restock_needed">Restock Needed</option>
-            <option value="est_restock_profit">Est Restock Profit</option>
-            <option value="est_restock_cost">Est Restock Cost</option>
-            <option value="profit_per_unit">Profit / Unit</option>
-            <option value="forecast_60d">Forecast 60d</option>
-            <option value="available">Available</option>
-            <option value="adu_30d">ADU 30d</option>
-            <option value="units_30d">Units 30d</option>
-            <option value="units_60d">Units 60d</option>
-            <option value="units_90d">Units 90d</option>
-            <option value="days_since_last_order">Days Since Last Order</option>
-            <option value="sku">SKU</option>
-          </select>
-          <select id="forecastDir" class="ctrl-sel" onchange="renderInventoryPage()">
-            <option value="desc">High → Low</option>
-            <option value="asc">Low → High</option>
-          </select>
           <div style="display:flex;align-items:center;gap:5px;">
             <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35"/></svg>
             <input id="forecastSearch" type="text" class="ctrl-inp" placeholder="Search SKU / name…" style="width:170px;" oninput="renderInventoryPage()" />
@@ -922,20 +856,6 @@
             <option value="4">4. Definitely Discontinue (&gt;365d)</option>
           </select>
           <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
-          <span style="font-size:12px;color:var(--text3);">Sort</span>
-          <select id="agingSort" class="ctrl-sel" onchange="renderInventoryPage()">
-            <option value="days_since_last_order">Days Since Last Order</option>
-            <option value="available">Available</option>
-            <option value="capital_stuck">Capital Stuck</option>
-            <option value="unit_cost">Unit Cost</option>
-            <option value="profit_per_unit">Profit / Unit</option>
-            <option value="lifetime_units_sold">Lifetime Units Sold</option>
-            <option value="sku">SKU</option>
-          </select>
-          <select id="agingDir" class="ctrl-sel" onchange="renderInventoryPage()">
-            <option value="asc">Low → High</option>
-            <option value="desc">High → Low</option>
-          </select>
           <div style="display:flex;align-items:center;gap:5px;">
             <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35"/></svg>
             <input id="agingSearch" type="text" class="ctrl-inp" placeholder="Search SKU / name…" style="width:170px;" oninput="renderInventoryPage()" />
@@ -943,8 +863,12 @@
           </div>
         </div>
 
+        <!-- Sort affordance hint (headers are click-to-sort) -->
+        <span style="margin-left:auto;font-size:11px;color:var(--text3);white-space:nowrap;"
+          title="Click any column header to sort. Click again to flip direction. Hold Shift and click a second column to sort within the first.">
+          ⇅ Click header to sort · <b style="color:var(--text2);">Shift+Click</b> = 2nd sort</span>
         <!-- CSV download (right side, same row as the filters) -->
-        <div class="dl-wrap" style="margin-left:auto;">
+        <div class="dl-wrap" style="margin-left:12px;">
           <button id="inventoryDlBtn" class="dl-btn" onclick="downloadInventoryCSV()" title="Download the currently selected inventory view (matches Channel/Status or Warehouse/Priority filters)">
             <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
             CSV

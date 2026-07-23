@@ -589,37 +589,37 @@ function acDualCell(orderVal, netVal, money, single) {
 }
 const acDash = '<span style="color:var(--text3);">—</span>';
 
-// ── Frozen column headers ─────────────────────────────────────────────────────
+// ── Frozen column headers (click-to-sort, Shift+Click = secondary) ───────────
 function acOrderHead() {
   return `<tr>
-    <th style="text-align:left;">Cause</th>
-    <th style="text-align:left;">Order ID / SKU</th>
-    <th style="text-align:left;">Platform</th>
-    <th style="text-align:left;">Supplier</th>
-    <th>Order Date</th>
-    <th>DS Fee</th>
-    <th>Shipping</th>
-    <th>Product Sales</th>
-    <th>Sales Margin</th>
-    <th>Unit Cost</th>
-    <th>Qty</th>
-    <th>Profit</th>
+    ${hdrTh('ac_ord', 'cause', 'Cause', { align: 'left' })}
+    ${hdrTh('ac_ord', 'order_id', 'Order ID / SKU', { align: 'left' })}
+    ${hdrTh('ac_ord', 'platform', 'Platform', { align: 'left' })}
+    ${hdrTh('ac_ord', 'supplier', 'Supplier', { align: 'left' })}
+    ${hdrTh('ac_ord', 'order_date', 'Order Date')}
+    ${hdrTh('ac_ord', 'ds_fee', 'DS Fee')}
+    ${hdrTh('ac_ord', 'shipping', 'Shipping')}
+    ${hdrTh('ac_ord', 'sales', 'Product Sales')}
+    ${hdrTh('ac_ord', 'margin', 'Sales Margin')}
+    ${hdrTh('ac_ord', 'unit_cost', 'Unit Cost')}
+    ${hdrTh('ac_ord', 'qty', 'Qty')}
+    ${hdrTh('ac_ord', 'profit', 'Profit')}
   </tr>`;
 }
 function acSkuHead() {
   return `<tr>
-    <th style="text-align:left;">Cause</th>
-    <th style="text-align:left;">SKU</th>
-    <th style="text-align:left;">Platform</th>
-    <th style="text-align:left;">Supplier</th>
-    <th>Inventory</th>
-    <th>Product Sales</th>
-    <th>Sales Margin</th>
-    <th>Quantity</th>
-    <th>Unit Cost</th>
-    <th>Return Rate</th>
-    <th>Restock</th>
-    <th>Profit</th>
+    ${hdrTh('ac_sku', 'cause', 'Cause', { align: 'left' })}
+    ${hdrTh('ac_sku', 'sku', 'SKU', { align: 'left' })}
+    ${hdrTh('ac_sku', 'platform', 'Platform', { align: 'left' })}
+    ${hdrTh('ac_sku', 'supplier', 'Supplier', { align: 'left' })}
+    ${hdrTh('ac_sku', 'inventory', 'Inventory')}
+    ${hdrTh('ac_sku', 'sales', 'Product Sales')}
+    ${hdrTh('ac_sku', 'margin', 'Sales Margin')}
+    ${hdrTh('ac_sku', 'qty', 'Quantity')}
+    ${hdrTh('ac_sku', 'unit_cost', 'Unit Cost')}
+    ${hdrTh('ac_sku', 'return_rate', 'Return Rate')}
+    ${hdrTh('ac_sku', 'restock', 'Restock')}
+    ${hdrTh('ac_sku', 'profit', 'Profit')}
     <th>Reprice</th>
   </tr>`;
 }
@@ -1021,8 +1021,6 @@ function renderActionCenterPage() {
 
   const dlIcon = '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>';
   const ctrl = 'padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg);color:var(--text);';
-  const sortOpts = [['loss', 'Biggest loss'], ['smallest', 'Smallest loss'], ['sku', 'SKU A–Z'], ['sales', 'Product sales'], ['qty', 'Quantity']]
-    .map(([v, l]) => `<option value="${v}"${(S.acSort || 'loss') === v ? ' selected' : ''}>${l}</option>`).join('');
 
   // Header card (stays fixed above the scrolling table). Row 1: title +
   // subtitle | search / sort / downloads. Row 2: cause chips.
@@ -1040,7 +1038,7 @@ function renderActionCenterPage() {
           <button id="acSearchClear" onclick="acClearSearch()" title="Clear" style="position:absolute;right:4px;border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;display:${S.acSearch ? '' : 'none'};">✕</button>
         </div>
         <select id="acManuSel" onchange="acManuChanged()" style="${ctrl}">${acManuOpts(level)}</select>
-        <select id="acSort" onchange="acSortChanged()" style="${ctrl}">${sortOpts}</select>
+        <span style="font-size:11px;color:var(--text3);white-space:nowrap;" title="Click any column header to sort. Click again to flip direction. Hold Shift and click a second column to sort within the first.">⇅ sort via headers</span>
         <button class="dl-btn" onclick="acDownload('order')" title="Download all order-level insights (ignores the cause filter)">${dlIcon} Order CSV</button>
         <button class="dl-btn" onclick="acDownload('sku')" title="Download all SKU-level insights (ignores the cause filter)">${dlIcon} SKU CSV</button>
       </div>
@@ -1077,14 +1075,33 @@ function acRenderBody() {
   // SKU-level coupon rows carry productSales/qty instead of orderSales/orderQty.
   const salesOf = i => level === 'order' ? (i.productSales || 0) : (i.orderSales ?? i.productSales ?? 0);
   const qtyOf   = i => level === 'order' ? (i.qty || 0) : (i.orderQty ?? i.qty ?? 0);
-  const cmp = {
-    loss:     (a, b) => { const pa = AC.CAUSE_PRIORITY[a.cause] || 0, pb = AC.CAUSE_PRIORITY[b.cause] || 0; return pa !== pb ? pb - pa : a.profit - b.profit; },
-    smallest: (a, b) => b.profit - a.profit,
-    sku:      (a, b) => String(a.sku || '').localeCompare(String(b.sku || '')),
-    sales:    (a, b) => salesOf(b) - salesOf(a),
-    qty:      (a, b) => qtyOf(b) - qtyOf(a),
-  }[S.acSort || 'loss'] || ((a, b) => a.profit - b.profit);
-  list = [...list].sort(cmp);
+  // Default sort (cause priority, then biggest loss) is the registered default
+  // two-level sort in HDR_VIEWS: cause desc + profit asc.
+  const fns = {
+    cause:       i => AC.CAUSE_PRIORITY[i.cause] || 0,
+    order_id:    i => String(i.orderId || '').toLowerCase(),
+    sku:         i => String(i.sku || '').toLowerCase(),
+    platform:    i => String(i.platform || '').toLowerCase(),
+    supplier:    i => (acManu(i.sku) || '').toLowerCase(),
+    order_date:  i => String(i.orderDate || ''),
+    ds_fee:      i => Number(i.dropshipFee) || 0,
+    shipping:    i => Number(i.shippingFee) || 0,
+    sales:       i => salesOf(i),
+    margin:      i => level === 'order' ? (Number(i.salesMargin) || 0) : (Number(i.orderMargin ?? i.salesMargin) || 0),
+    unit_cost:   i => Number(i.unitCost) || 0,
+    qty:         i => qtyOf(i),
+    profit:      i => Number(i.profit ?? i.netProfit) || 0,
+    inventory:   i => {
+      const inv = (typeof inventoryForView === 'function') ? inventoryForView(i.sku, i.platform) : { found: false };
+      return inv.found ? inv.total : -1e15;
+    },
+    return_rate: i => i.returnRate == null ? -1 : Number(i.returnRate),
+    restock:     i => {
+      const rs = (typeof lookupRestock === 'function') ? lookupRestock(i.platform, i.sku) : null;
+      return rs ? (Number(rs.units) || 0) : -1;
+    },
+  };
+  list = hdrSortRows(list, level === 'order' ? 'ac_ord' : 'ac_sku', fns);
 
   const cnt = document.getElementById('acResultCount');
   if (cnt) cnt.textContent = `${list.length}${(S.acCause || q || S.acManu) ? ` / ${fullList.length}` : ''}`;
@@ -1109,8 +1126,11 @@ window.acClearSearch = function () {
   const b = document.getElementById('acSearchClear'); if (b) b.style.display = 'none';
   acRenderBody();
 };
-window.acSortChanged = function () {
-  S.acSort = (document.getElementById('acSort') || {}).value || 'loss';
+// Header-click re-render for the loss board: rebuild the thead (sort
+// indicators) + body, but NOT the header card, so the search box keeps focus.
+window.acLossRerender = function () {
+  const headEl = document.getElementById('actionHead');
+  if (headEl) headEl.innerHTML = (S.acLevel || 'order') === 'sku' ? acSkuHead() : acOrderHead();
   acRenderBody();
 };
 
@@ -1125,15 +1145,15 @@ const AC_INV_COLS = ['SKU', 'AMAZON_INVENTORY', 'AMAZON_STATUS', 'MASTER_INVENTO
 
 function acInvHead() {
   return `<tr>
-    <th style="text-align:left;">SKU</th>
-    <th style="text-align:left;">Amazon Status</th>
-    <th>Amazon Qty</th>
-    <th>Supplier Qty</th>
-    <th>Diff</th>
-    <th style="text-align:left;">Warehouse Breakdown</th>
-    <th style="text-align:left;">Master Flag</th>
-    <th style="text-align:left;">Override</th>
-    <th style="text-align:left;">Missed Supplier</th>
+    ${hdrTh('ac_inv', 'sku', 'SKU', { align: 'left' })}
+    ${hdrTh('ac_inv', 'status', 'Amazon Status', { align: 'left' })}
+    ${hdrTh('ac_inv', 'amazon', 'Amazon Qty')}
+    ${hdrTh('ac_inv', 'master', 'Supplier Qty')}
+    ${hdrTh('ac_inv', 'diff', 'Diff')}
+    ${hdrTh('ac_inv', 'warehouse', 'Warehouse Breakdown', { align: 'left' })}
+    ${hdrTh('ac_inv', 'master_flag', 'Master Flag', { align: 'left' })}
+    ${hdrTh('ac_inv', 'override', 'Override', { align: 'left' })}
+    ${hdrTh('ac_inv', 'missed', 'Missed Supplier', { align: 'left' })}
   </tr>`;
 }
 
@@ -1186,8 +1206,6 @@ function acRenderInvPage() {
 
   const dlIcon = '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>';
   const ctrl = 'padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg);color:var(--text);';
-  const sortOpts = [['diff', 'Biggest diff'], ['sku', 'SKU A–Z'], ['master', 'Supplier qty']]
-    .map(([v, l]) => `<option value="${v}"${(S.acInvSort || 'diff') === v ? ' selected' : ''}>${l}</option>`).join('');
 
   hdrEl.innerHTML = `
     <div class="card" style="padding:14px 20px;">
@@ -1205,7 +1223,7 @@ function acRenderInvPage() {
             <input id="acInvSearch" value="${String(S.acInvSearch || '').replace(/"/g, '&quot;')}" oninput="acInvSearchChanged()" placeholder="Search SKU…" style="${ctrl}width:150px;padding-right:22px;"/>
             <button id="acInvSearchClear" onclick="acInvClearSearch()" title="Clear" style="position:absolute;right:4px;border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;display:${S.acInvSearch ? '' : 'none'};">✕</button>
           </div>
-          <select id="acInvSort" onchange="acInvSortChanged()" style="${ctrl}">${sortOpts}</select>
+          <span style="font-size:11px;color:var(--text3);white-space:nowrap;" title="Click any column header to sort. Click again to flip direction. Hold Shift and click a second column to sort within the first.">⇅ sort via headers</span>
         </div>
         <div class="dl-wrap" style="flex-direction:row;gap:8px;padding:6px 8px;">
           <button class="dl-btn" onclick="acInvDownload()" title="Download the full reconciliation list">${dlIcon} CSV</button>
@@ -1226,12 +1244,17 @@ function acInvRenderBody() {
   const q = String(S.acInvSearch || '').trim().toLowerCase();
   if (q) list = list.filter(r => String(r.SKU || '').toLowerCase().includes(q));
 
-  const cmp = {
-    diff:   (a, b) => acNum(b.DIFF) - acNum(a.DIFF),
-    sku:    (a, b) => String(a.SKU || '').localeCompare(String(b.SKU || '')),
-    master: (a, b) => acNum(b.MASTER_INVENTORY) - acNum(a.MASTER_INVENTORY),
-  }[S.acInvSort || 'diff'];
-  list = [...list].sort(cmp);
+  list = hdrSortRows(list, 'ac_inv', {
+    sku:         r => String(r.SKU || '').toLowerCase(),
+    status:      r => String(r.AMAZON_STATUS || '').toLowerCase(),
+    amazon:      r => acNum(r.AMAZON_INVENTORY),
+    master:      r => acNum(r.MASTER_INVENTORY),
+    diff:        r => acNum(r.DIFF),
+    warehouse:   r => String(r.WAREHOUSE_BREAKDOWN || '').toLowerCase(),
+    master_flag: r => String(r.MASTER_FLAG || '').toLowerCase(),
+    override:    r => String(r.OVERRIDE_FLAG || '').toLowerCase(),
+    missed:      r => String(r.MISSED_SUPPLIER_INVENTORY || '').toLowerCase(),
+  });
 
   const cnt = document.getElementById('acInvResultCount');
   if (cnt) cnt.textContent = `${list.length}${q ? ` / ${full.length}` : ''} SKUs`;
@@ -1255,8 +1278,10 @@ window.acInvClearSearch = function () {
   const b = document.getElementById('acInvSearchClear'); if (b) b.style.display = 'none';
   acInvRenderBody();
 };
-window.acInvSortChanged = function () {
-  S.acInvSort = (document.getElementById('acInvSort') || {}).value || 'diff';
+// Header-click re-render for the Inventory Check table.
+window.acInvRerender = function () {
+  const headEl = document.getElementById('actionHead');
+  if (headEl) headEl.innerHTML = acInvHead();
   acInvRenderBody();
 };
 
@@ -1331,16 +1356,16 @@ function acRestockChannelPill(ch) {
 
 function acRestockHead() {
   return `<tr>
-    <th style="text-align:left;">Urgency</th>
-    <th style="text-align:left;">SKU</th>
-    <th style="text-align:left;">Channel</th>
-    <th>Available</th>
-    <th>Sold / Day</th>
-    <th>Cover</th>
-    <th>Forecast 60d</th>
-    <th>Suggest Qty</th>
-    <th>Profit / Unit</th>
-    <th>Est Profit</th>
+    ${hdrTh('ac_rst', 'urgency', 'Urgency', { align: 'left' })}
+    ${hdrTh('ac_rst', 'sku', 'SKU', { align: 'left' })}
+    ${hdrTh('ac_rst', 'channel', 'Channel', { align: 'left' })}
+    ${hdrTh('ac_rst', 'available', 'Available')}
+    ${hdrTh('ac_rst', 'adu', 'Sold / Day')}
+    ${hdrTh('ac_rst', 'cover', 'Cover')}
+    ${hdrTh('ac_rst', 'forecast', 'Forecast 60d')}
+    ${hdrTh('ac_rst', 'suggest', 'Suggest Qty')}
+    ${hdrTh('ac_rst', 'ppu', 'Profit / Unit')}
+    ${hdrTh('ac_rst', 'est_profit', 'Est Profit')}
   </tr>`;
 }
 
@@ -1389,8 +1414,6 @@ function acRenderRestockPage() {
 
   const dlIcon = '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>';
   const ctrl = 'padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg);color:var(--text);';
-  const sortOpts = [['priority', 'Priority'], ['profit', 'Est profit'], ['cover', 'Days of cover'], ['adu', 'Sales velocity'], ['sku', 'SKU A–Z']]
-    .map(([v, l]) => `<option value="${v}"${(S.acRestockSort || 'priority') === v ? ' selected' : ''}>${l}</option>`).join('');
 
   hdrEl.innerHTML = `
     <div class="card" style="padding:14px 20px;">
@@ -1405,7 +1428,7 @@ function acRenderRestockPage() {
           <input id="acRestockSearch" value="${String(S.acRestockSearch || '').replace(/"/g, '&quot;')}" oninput="acRestockSearchChanged()" placeholder="Search SKU…" style="${ctrl}width:150px;padding-right:22px;"/>
           <button id="acRestockSearchClear" onclick="acRestockClearSearch()" title="Clear" style="position:absolute;right:4px;border:none;background:none;color:var(--text3);cursor:pointer;font-size:13px;display:${S.acRestockSearch ? '' : 'none'};">✕</button>
         </div>
-        <select id="acRestockSortSel" onchange="acRestockSortChanged()" style="${ctrl}">${sortOpts}</select>
+        <span style="font-size:11px;color:var(--text3);white-space:nowrap;" title="Click any column header to sort. Click again to flip direction. Hold Shift and click a second column to sort within the first.">⇅ sort via headers</span>
         <button class="dl-btn" onclick="acRestockDownload()" title="Download the full restock list (ignores filters)">${dlIcon} CSV</button>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:11px;padding-top:11px;border-top:1px solid var(--border);">
@@ -1426,18 +1449,20 @@ function acRestockRenderBody() {
   const q = String(S.acRestockSearch || '').trim().toLowerCase();
   if (q) list = list.filter(i => String(i.sku).toLowerCase().includes(q) || String(i.name).toLowerCase().includes(q));
 
-  const cmp = {
-    // tier first, then the money at stake (missing profit sorts last within tier)
-    priority: (a, b) => {
-      const pa = AC_RESTOCK.TIER_PRIORITY[a.tier], pb = AC_RESTOCK.TIER_PRIORITY[b.tier];
-      return pa !== pb ? pb - pa : (b.estProfit || 0) - (a.estProfit || 0);
-    },
-    profit: (a, b) => (b.estProfit || 0) - (a.estProfit || 0),
-    cover:  (a, b) => (a.cover ?? 1e9) - (b.cover ?? 1e9),
-    adu:    (a, b) => b.adu - a.adu,
-    sku:    (a, b) => String(a.sku).localeCompare(String(b.sku)),
-  }[S.acRestockSort || 'priority'];
-  list = [...list].sort(cmp);
+  // Default (urgency tier, then est profit) is the registered two-level sort
+  // in HDR_VIEWS. Missing values use sentinels so they sort last on desc.
+  list = hdrSortRows(list, 'ac_rst', {
+    urgency:    i => AC_RESTOCK.TIER_PRIORITY[i.tier] || 0,
+    sku:        i => String(i.sku).toLowerCase(),
+    channel:    i => String(i.channel || ''),
+    available:  i => Number(i.available) || 0,
+    adu:        i => Number(i.adu) || 0,
+    cover:      i => (i.cover ?? 1e9),
+    forecast:   i => Number(i.forecast60) || 0,
+    suggest:    i => Number(i.restock) || 0,
+    ppu:        i => (i.ppu == null ? -1e15 : Number(i.ppu) || 0),
+    est_profit: i => (i.estProfit == null ? -1e15 : Number(i.estProfit) || 0),
+  });
 
   const cnt = document.getElementById('acRestockResultCount');
   if (cnt) cnt.textContent = `${list.length}${(S.acRestockTier || q) ? ` / ${full.length}` : ''} SKUs`;
@@ -1466,8 +1491,10 @@ window.acRestockClearSearch = function () {
   const b = document.getElementById('acRestockSearchClear'); if (b) b.style.display = 'none';
   acRestockRenderBody();
 };
-window.acRestockSortChanged = function () {
-  S.acRestockSort = (document.getElementById('acRestockSortSel') || {}).value || 'priority';
+// Header-click re-render for the Restock Alert table.
+window.acRestockRerender = function () {
+  const headEl = document.getElementById('actionHead');
+  if (headEl) headEl.innerHTML = acRestockHead();
   acRestockRenderBody();
 };
 

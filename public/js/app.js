@@ -29,6 +29,79 @@ const S = {
 };
 window.S = S;
 
+// ── Shared click-to-sort header machinery ────────────────────────────────────
+// Same UX as the Coupon page (coupon.js cp* helpers): click a header to sort,
+// click again to flip, Shift+Click a second column for a secondary sort.
+// Each table registers a "view" here: defaults = initial sort (k2/d2 = optional
+// secondary), text/ascFirst = columns whose first click sorts ascending,
+// render = window fn re-run after a header click.
+
+const HDR_VIEWS = {
+  pd:     { defaults: { k: 'revenue',               d: 'desc', k2: null,         d2: 'desc' }, ascFirst: ['sku'],                                              render: 'renderProductsPage' },
+  od:     { defaults: { k: 'order_date',            d: 'desc', k2: null,         d2: 'desc' }, ascFirst: ['order_id', 'sku', 'platform'],                      render: 'renderOrderDetailPage' },
+  if:     { defaults: { k: 'restock_needed',        d: 'desc', k2: null,         d2: 'desc' }, ascFirst: ['sku', 'manufacturer', 'status'],                    render: 'renderInventoryPage' },
+  ia:     { defaults: { k: 'days_since_last_order', d: 'asc',  k2: null,         d2: 'desc' }, ascFirst: ['sku', 'warehouse', 'priority'],                     render: 'renderInventoryPage' },
+  ac_ord: { defaults: { k: 'cause',                 d: 'desc', k2: 'profit',     d2: 'asc'  }, ascFirst: ['order_id', 'sku', 'platform', 'supplier'],          render: 'acLossRerender' },
+  ac_sku: { defaults: { k: 'cause',                 d: 'desc', k2: 'profit',     d2: 'asc'  }, ascFirst: ['sku', 'platform', 'supplier'],                      render: 'acLossRerender' },
+  ac_inv: { defaults: { k: 'diff',                  d: 'desc', k2: null,         d2: 'desc' }, ascFirst: ['sku', 'status', 'master_flag', 'override', 'missed', 'warehouse'], render: 'acInvRerender' },
+  ac_rst: { defaults: { k: 'urgency',               d: 'desc', k2: 'est_profit', d2: 'desc' }, ascFirst: ['sku', 'channel', 'cover'],                          render: 'acRestockRerender' },
+};
+
+function hdrState(view) {
+  if (!S.hdrSort) S.hdrSort = {};
+  if (!S.hdrSort[view]) S.hdrSort[view] = Object.assign({}, HDR_VIEWS[view].defaults);
+  return S.hdrSort[view];
+}
+
+function hdrClick(view, key, ev) {
+  const cfg = HDR_VIEWS[view];
+  const st = hdrState(view);
+  const defDir = (cfg.ascFirst || []).includes(key) ? 'asc' : 'desc';
+  if (ev && ev.shiftKey && key !== st.k) {
+    if (st.k2 === key) st.d2 = st.d2 === 'asc' ? 'desc' : 'asc';
+    else { st.k2 = key; st.d2 = defDir; }
+  } else if (st.k === key) {
+    st.d = st.d === 'asc' ? 'desc' : 'asc';
+  } else {
+    st.k = key; st.d = defDir; st.k2 = null;
+  }
+  const rf = window[cfg.render];
+  if (typeof rf === 'function') rf();
+}
+window.hdrClick = hdrClick;
+
+// Sortable <th>. opts: { align, min, w }. Unsorted columns show a faint ⇅.
+function hdrTh(view, key, label, opts) {
+  const o = opts || {};
+  const st = hdrState(view);
+  let indHtml = ` <span style="font-size:9px;color:var(--text3);opacity:.5;">⇅</span>`;
+  if (st.k === key) {
+    indHtml = ` <span style="font-size:9px;color:#0ea5e9;">${(st.d === 'asc' ? '▲' : '▼') + (st.k2 ? '¹' : '')}</span>`;
+  } else if (st.k2 === key) {
+    indHtml = ` <span style="font-size:9px;color:#0ea5e9;">${(st.d2 === 'asc' ? '▲' : '▼') + '²'}</span>`;
+  }
+  const style = `${o.align ? `text-align:${o.align};` : ''}${o.min ? `min-width:${o.min};` : ''}` +
+    `${o.w ? `width:${o.w};` : ''}cursor:pointer;user-select:none;white-space:nowrap;`;
+  return `<th style="${style}" title="Click to sort · Shift+Click = secondary sort (sort within the first sort)"
+    onclick="hdrClick('${view}','${key}',event)">${label}${indHtml}</th>`;
+}
+window.hdrTh = hdrTh;
+
+function hdrSortRows(rows, view, fns) {
+  const st = hdrState(view);
+  const f1 = fns[st.k] || (() => 0);
+  const f2 = st.k2 ? fns[st.k2] : null;
+  const cmp = (f, dir) => (a, b) => {
+    const va = f(a), vb = f(b);
+    if (va < vb) return dir === 'asc' ? -1 : 1;
+    if (va > vb) return dir === 'asc' ?  1 : -1;
+    return 0;
+  };
+  const c1 = cmp(f1, st.d), c2 = f2 ? cmp(f2, st.d2) : null;
+  return [...rows].sort((a, b) => c1(a, b) || (c2 ? c2(a, b) : 0));
+}
+window.hdrSortRows = hdrSortRows;
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 function fmt(v, type = 'currency') {
