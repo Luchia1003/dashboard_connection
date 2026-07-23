@@ -796,6 +796,18 @@
             <option value="target">Target SKUs</option>
             <option value="all">All (incl. swept variants)</option>
           </select>
+          <span style="font-size:12px;color:var(--text3);">Discount</span>
+          <select id="couponShopPct" class="ctrl-sel" onchange="renderCouponPage()">
+            <option value="">All %</option>
+          </select>
+          <div id="couponShopSkuOnlyFilters" style="display:flex;align-items:center;gap:10px;">
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap;" title="Hide SKUs with no quantity sold">
+              <input type="checkbox" id="couponShopSoldOnly" onchange="renderCouponPage()" style="accent-color:#0ea5e9;cursor:pointer;"> Sold only
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap;" title="Hide SKUs with no available inventory at push time">
+              <input type="checkbox" id="couponShopAvailOnly" onchange="renderCouponPage()" style="accent-color:#0ea5e9;cursor:pointer;"> In stock
+            </label>
+          </div>
           <div style="display:flex;align-items:center;gap:5px;">
             <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35"/></svg>
             <input id="couponShopSearch" type="text" class="ctrl-inp" placeholder="Search SKU / Order…" style="width:150px;" oninput="renderCouponPage()" />
@@ -803,8 +815,13 @@
           </div>
         </div>
 
+        <!-- Sort affordance hint (headers are click-to-sort) -->
+        <span id="couponSortHint" style="margin-left:auto;font-size:11px;color:var(--text3);white-space:nowrap;"
+          title="Click any column header to sort. Click again to flip direction. Hold Shift and click a second column to sort within the first (e.g. Supplier, then Shift+Profit).">
+          ⇅ Click header to sort · <b style="color:var(--text2);">Shift+Click</b> = 2nd sort</span>
+
         <!-- Right cluster: context-aware CSV downloads (this month + last full month) -->
-        <div class="dl-wrap" style="margin-left:auto;">
+        <div class="dl-wrap" style="margin-left:12px;">
           <div style="display:flex;gap:6px;">
             <button id="couponDlBtn" class="dl-btn" onclick="downloadCouponCSV()" title="Download the currently selected coupon view (SKU level or Order level), month-to-date">
               <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>

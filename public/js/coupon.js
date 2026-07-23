@@ -169,16 +169,19 @@ function cpHeaderClick(view, key, ev) {
 window.cpHeaderClick = cpHeaderClick;
 
 // Sortable <th>. opts: { align, min, w }
+// Unsorted columns show a faint ⇅ so it's clear every header is clickable.
 function cpTh(view, key, label, opts) {
   const o = opts || {};
   const st = cpSortState(view);
-  let ind = '';
-  if (st.k === key)       ind = (st.d  === 'asc' ? '▲' : '▼') + (st.k2 ? '¹' : '');
-  else if (st.k2 === key) ind = (st.d2 === 'asc' ? '▲' : '▼') + '²';
+  let indHtml = ` <span style="font-size:9px;color:var(--text3);opacity:.5;">⇅</span>`;
+  if (st.k === key) {
+    indHtml = ` <span style="font-size:9px;color:#0ea5e9;">${(st.d === 'asc' ? '▲' : '▼') + (st.k2 ? '¹' : '')}</span>`;
+  } else if (st.k2 === key) {
+    indHtml = ` <span style="font-size:9px;color:#0ea5e9;">${(st.d2 === 'asc' ? '▲' : '▼') + '²'}</span>`;
+  }
   const style = `${o.align ? `text-align:${o.align};` : ''}${o.min ? `min-width:${o.min};` : ''}` +
     `${o.w ? `width:${o.w};` : ''}cursor:pointer;user-select:none;white-space:nowrap;`;
-  const indHtml = ind ? ` <span style="font-size:9px;color:#0ea5e9;">${ind}</span>` : '';
-  return `<th style="${style}" title="Click to sort · Shift+Click = secondary sort"
+  return `<th style="${style}" title="Click to sort · Shift+Click = secondary sort (sort within the first sort)"
     onclick="cpHeaderClick('${view}','${key}',event)">${label}${indHtml}</th>`;
 }
 
@@ -341,6 +344,7 @@ window.setCouponShopLevel = setCouponShopLevel;
 function renderCouponPage() {
   cpEnsureSuppliers();
   cpPopulateSupplierSel();
+  cpPopulateShopPct();
   if ((S.couponPlatform || 'amazon') === 'shopify') {
     if (!S.couponShopSku || !S.couponShopOrder) { loadCouponShopData(); return; }
     renderCouponShopify();
@@ -569,6 +573,13 @@ function getCouponShopFiltered() {
   const query = String(((document.getElementById('couponShopSearch') || {}).value || '')).trim().toLowerCase();
   let rows = level === 'sku' ? (S.couponShopSku || []) : (S.couponShopOrder || []);
   if (scope === 'target') rows = rows.filter(r => cpBool(r.IS_TARGET));
+  const pctV = ((document.getElementById('couponShopPct') || {}).value) || '';
+  if (pctV) rows = rows.filter(r => Math.round(Number(r.GROUP_PCT) || 0) === Number(pctV));
+  // SKU-level-only toggles (order rows always have qty, and lack avail-at-push)
+  if (level === 'sku') {
+    if ((document.getElementById('couponShopSoldOnly')  || {}).checked) rows = rows.filter(r => (Number(r.ORDER_QTY) || 0) > 0);
+    if ((document.getElementById('couponShopAvailOnly') || {}).checked) rows = rows.filter(r => (Number(r.AVAILABLE_AT_PUSH) || 0) > 0);
+  }
   if (query) {
     rows = rows.filter(r =>
       String(r.SKU || '').toLowerCase().includes(query) ||
@@ -578,6 +589,21 @@ function getCouponShopFiltered() {
   return cpSupplierFilter(rows);
 }
 window.getCouponShopFiltered = getCouponShopFiltered;
+
+// Populate the Discount % filter from the distinct GROUP_PCT tiers in the data.
+function cpPopulateShopPct() {
+  const sel = document.getElementById('couponShopPct');
+  if (!sel) return;
+  const pcts = new Set();
+  [...(S.couponShopSku || []), ...(S.couponShopOrder || [])].forEach(r => {
+    const p = Math.round(Number(r.GROUP_PCT) || 0);
+    if (p) pcts.add(p);
+  });
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">All %</option>` +
+    [...pcts].sort((a, b) => a - b).map(p => `<option value="${p}">${p}%</option>`).join('');
+  if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
 
 function cpShopSummary() {
   const scope = (document.getElementById('couponShopScope') || {}).value || 'target';
@@ -607,6 +633,9 @@ function cpShopSummary() {
 function renderCouponShopify() {
   cpShopSummary();
   const level = S.couponShopLevel || 'sku';
+  // Sold/In-stock toggles only make sense at SKU level
+  const skuOnly = document.getElementById('couponShopSkuOnlyFilters');
+  if (skuOnly) skuOnly.style.display = level === 'sku' ? 'flex' : 'none';
   const searchRaw = String(((document.getElementById('couponShopSearch') || {}).value || '')).trim();
   const clrBtn = document.getElementById('couponShopSearchClear');
   if (clrBtn) clrBtn.style.display = searchRaw ? '' : 'none';
