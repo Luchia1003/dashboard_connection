@@ -757,25 +757,17 @@
           <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;margin-left:6px;"></div>
         </div>
 
+        <!-- Supplier filter (applies to every coupon view + CSV download) -->
+        <div id="couponSupplierWrap" style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:12px;color:var(--text3);">Supplier</span>
+          <select id="couponSupplierSel" class="ctrl-sel" style="min-width:120px;" onchange="renderCouponPage()">
+            <option value="">All Suppliers</option>
+          </select>
+          <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;margin-left:6px;"></div>
+        </div>
+
         <!-- SKU-level controls -->
         <div id="couponSkuControls" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-size:12px;color:var(--text3);">Sort</span>
-          <select id="couponSkuSort" class="ctrl-sel" onchange="renderCouponPage()">
-            <option value="order_date">Order Date</option>
-            <option value="sku">SKU</option>
-            <option value="product_sales">Product Sales</option>
-            <option value="profit">Profit</option>
-            <option value="qty">Quantity</option>
-            <option value="coupon_fee">Coupon Fee</option>
-            <option value="new_margin">New Margin</option>
-            <option value="margin">Margin</option>
-            <option value="refund_qty">Refund Qty</option>
-            <option value="net_profit">Net Profit</option>
-          </select>
-          <select id="couponSkuDir" class="ctrl-sel" onchange="renderCouponPage()">
-            <option value="desc">Newest / High → Low</option>
-            <option value="asc">Oldest / Low → High</option>
-          </select>
           <div style="display:flex;align-items:center;gap:5px;">
             <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35"/></svg>
             <input id="couponSkuSearch" type="text" class="ctrl-inp" placeholder="Search SKU…" style="width:130px;" oninput="renderCouponPage()" />
@@ -785,20 +777,6 @@
 
         <!-- Order-level controls -->
         <div id="couponOrdControls" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-size:12px;color:var(--text3);">Sort</span>
-          <select id="couponOrdSort" class="ctrl-sel" onchange="renderCouponPage()">
-            <option value="order_date">Order Date</option>
-            <option value="sales">Product Sales</option>
-            <option value="profit">Profit</option>
-            <option value="coupon_fee">Coupon Fee</option>
-            <option value="qty">Quantity</option>
-            <option value="sku">SKU</option>
-            <option value="net_profit">Net Profit</option>
-          </select>
-          <select id="couponOrdDir" class="ctrl-sel" onchange="renderCouponPage()">
-            <option value="desc">Newest / High → Low</option>
-            <option value="asc">Oldest / Low → High</option>
-          </select>
           <div style="display:flex;align-items:center;gap:5px;">
             <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35"/></svg>
             <input id="couponOrdSearch" type="text" class="ctrl-inp" placeholder="Search Order ID / SKU…" style="width:180px;" oninput="renderCouponPage()" />
@@ -817,20 +795,6 @@
           <select id="couponShopScope" class="ctrl-sel" onchange="renderCouponPage()">
             <option value="target">Target SKUs</option>
             <option value="all">All (incl. swept variants)</option>
-          </select>
-          <span style="font-size:12px;color:var(--text3);">Sort</span>
-          <select id="couponShopSort" class="ctrl-sel" onchange="renderCouponPage()">
-            <option value="profit">Profit</option>
-            <option value="sales">Product Sales</option>
-            <option value="qty">Qty Sold</option>
-            <option value="discount">Est Coupon $</option>
-            <option value="pct">Discount %</option>
-            <option value="date">Last Order Date</option>
-            <option value="sku">SKU</option>
-          </select>
-          <select id="couponShopDir" class="ctrl-sel" onchange="renderCouponPage()">
-            <option value="desc">High → Low</option>
-            <option value="asc">Low → High</option>
           </select>
           <div style="display:flex;align-items:center;gap:5px;">
             <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35"/></svg>

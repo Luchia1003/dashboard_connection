@@ -6,14 +6,16 @@
 // Coupon uses its own date selector — independent of the global topbar filter.
 function getCouponSkuFiltered() {
   if (!S.couponSku) return [];
-  if (!S.couponDate) return S.couponSku;
-  return S.couponSku.filter(row => String(row.ORDER_DATE).slice(0, 10) === S.couponDate);
+  let rows = S.couponSku;
+  if (S.couponDate) rows = rows.filter(row => String(row.ORDER_DATE).slice(0, 10) === S.couponDate);
+  return cpSupplierFilter(rows);
 }
 
 function getCouponOrderFiltered() {
   if (!S.couponOrder) return [];
-  if (!S.couponDate) return S.couponOrder;
-  return S.couponOrder.filter(row => String(row.ORDER_DATE).slice(0, 10) === S.couponDate);
+  let rows = S.couponOrder;
+  if (S.couponDate) rows = rows.filter(row => String(row.ORDER_DATE).slice(0, 10) === S.couponDate);
+  return cpSupplierFilter(rows);
 }
 
 // Populate the date dropdown from every ORDER_DATE present (the MTD window).
@@ -102,6 +104,150 @@ function cpWithSupplier(rows) {
   return (rows || []).map(r => Object.assign({}, r, { SUPPLIER: cpSupplier(r.SKU) }));
 }
 window.cpWithSupplier = cpWithSupplier;
+
+// ── Supplier filter (toolbar select, applies to table + CSV) ─────────────────
+
+function cpSupplierFilter(rows) {
+  const v = ((document.getElementById('couponSupplierSel') || {}).value) || '';
+  if (!v) return rows;
+  if (v === '__unknown') return rows.filter(r => !cpSupplier(r.SKU));
+  return rows.filter(r => cpSupplier(r.SKU) === v);
+}
+
+// Rebuild the supplier dropdown from the current platform's data, keeping the
+// current selection when still present.
+function cpPopulateSupplierSel() {
+  const sel = document.getElementById('couponSupplierSel');
+  if (!sel) return;
+  const isShop = (S.couponPlatform || 'amazon') === 'shopify';
+  const src = isShop
+    ? [...(S.couponShopSku || []), ...(S.couponShopOrder || [])]
+    : [...(S.couponSku || []), ...(S.couponOrder || [])];
+  const names = new Set();
+  let hasUnknown = false;
+  src.forEach(r => { const m = cpSupplier(r.SKU); if (m) names.add(m); else hasUnknown = true; });
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">All Suppliers</option>` +
+    [...names].sort((a, b) => a.localeCompare(b)).map(n => `<option value="${n}">${n}</option>`).join('') +
+    (hasUnknown ? `<option value="__unknown">Unknown</option>` : '');
+  if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+
+// ── Column-header sorting (click = sort, Shift+Click = secondary sort) ───────
+// One sort state per view: k/d = primary column & direction, k2/d2 = optional
+// secondary (tie-breaker within equal primary values).
+
+const CP_SORT_DEFAULTS = {
+  a_sku: { k: 'order_date', d: 'desc', k2: null, d2: 'desc' },
+  a_ord: { k: 'order_date', d: 'desc', k2: null, d2: 'desc' },
+  s_sku: { k: 'profit',     d: 'desc', k2: null, d2: 'desc' },
+  s_ord: { k: 'profit',     d: 'desc', k2: null, d2: 'desc' },
+};
+
+// Text columns start ascending on first click; numbers/dates start descending.
+const CP_TEXT_COLS = new Set(['sku', 'supplier', 'order_id', 'order']);
+
+function cpSortState(view) {
+  if (!S.cpSort) S.cpSort = {};
+  if (!S.cpSort[view]) S.cpSort[view] = Object.assign({}, CP_SORT_DEFAULTS[view]);
+  return S.cpSort[view];
+}
+
+function cpHeaderClick(view, key, ev) {
+  const st = cpSortState(view);
+  const defDir = CP_TEXT_COLS.has(key) ? 'asc' : 'desc';
+  if (ev && ev.shiftKey && key !== st.k) {
+    if (st.k2 === key) st.d2 = st.d2 === 'asc' ? 'desc' : 'asc';
+    else { st.k2 = key; st.d2 = defDir; }
+  } else if (st.k === key) {
+    st.d = st.d === 'asc' ? 'desc' : 'asc';
+  } else {
+    st.k = key; st.d = defDir; st.k2 = null;
+  }
+  renderCouponPage();
+}
+window.cpHeaderClick = cpHeaderClick;
+
+// Sortable <th>. opts: { align, min, w }
+function cpTh(view, key, label, opts) {
+  const o = opts || {};
+  const st = cpSortState(view);
+  let ind = '';
+  if (st.k === key)       ind = (st.d  === 'asc' ? '▲' : '▼') + (st.k2 ? '¹' : '');
+  else if (st.k2 === key) ind = (st.d2 === 'asc' ? '▲' : '▼') + '²';
+  const style = `${o.align ? `text-align:${o.align};` : ''}${o.min ? `min-width:${o.min};` : ''}` +
+    `${o.w ? `width:${o.w};` : ''}cursor:pointer;user-select:none;white-space:nowrap;`;
+  const indHtml = ind ? ` <span style="font-size:9px;color:#0ea5e9;">${ind}</span>` : '';
+  return `<th style="${style}" title="Click to sort · Shift+Click = secondary sort"
+    onclick="cpHeaderClick('${view}','${key}',event)">${label}${indHtml}</th>`;
+}
+
+function cpSortRows(rows, view, fns) {
+  const st = cpSortState(view);
+  const f1 = fns[st.k] || (() => 0);
+  const f2 = st.k2 ? fns[st.k2] : null;
+  const cmp = (f, dir) => (a, b) => {
+    const va = f(a), vb = f(b);
+    if (va < vb) return dir === 'asc' ? -1 : 1;
+    if (va > vb) return dir === 'asc' ?  1 : -1;
+    return 0;
+  };
+  const c1 = cmp(f1, st.d), c2 = f2 ? cmp(f2, st.d2) : null;
+  return [...rows].sort((a, b) => c1(a, b) || (c2 ? c2(a, b) : 0));
+}
+
+// Sort accessors — Amazon tables (SKU + order level share one map).
+const CP_AMZ_FNS = {
+  order_date:    r => r.ORDER_DATE || '',
+  order_id:      r => String(r.ORDER_ID || '').toLowerCase(),
+  sku:           r => String(r.SKU || '').toLowerCase(),
+  supplier:      r => (cpSupplier(r.SKU) || '').toLowerCase(),
+  qty:           r => Number(r.ORDER_QTY)           || 0,
+  product_sales: r => Number(r.ORDER_PRODUCT_SALES) || 0,
+  margin:        r => Number(r.ORDER_MARGIN)        || 0,
+  coupon_fee:    r => Number(r.ORDER_COUPON_FEE)    || 0,
+  shipping_fee:  r => Number(r.ORDER_SHIPPING_FEE)  || 0,
+  dropship_fee:  r => Number(r.ORDER_DROPSHIP_FEE)  || 0,
+  new_margin:    r => Number(r.ORDER_NEW_MARGIN)    || 0,
+  profit:        r => Number(r.ORDER_PROFIT)        || 0,
+  refund_qty:    r => Number(r.REFUND_QTY)          || 0,
+  refund_amt:    r => Number(r.REFUND_PRODUCT_SALES)|| 0,
+  net_qty:       r => Number(r.NET_QTY)             || 0,
+  net_profit:    r => Number(r.NET_PROFIT)          || 0,
+  unit_cost:     r => Number(r.UNIT_COST)           || 0,
+};
+
+// Sort accessors — Shopify SKU level.
+const CP_SHOP_SKU_FNS = {
+  sku:        r => String(r.SKU || '').toLowerCase(),
+  supplier:   r => (cpSupplier(r.SKU) || '').toLowerCase(),
+  pct:        r => Number(r.GROUP_PCT)           || 0,
+  price_push: r => Number(r.PRICE_AT_PUSH)       || 0,
+  unit_cost:  r => Number(r.UNIT_COST)           || 0,
+  avail:      r => Number(r.AVAILABLE_AT_PUSH)   || 0,
+  orders:     r => Number(r.ORDER_COUNT)         || 0,
+  qty:        r => Number(r.ORDER_QTY)           || 0,
+  sales:      r => Number(r.ORDER_PRODUCT_SALES) || 0,
+  discount:   r => Number(r.EST_COUPON_DISCOUNT) || 0,
+  margin:     r => Number(r.ORDER_MARGIN)        || 0,
+  profit:     r => Number(r.ORDER_PROFIT)        || 0,
+  date:       r => r.LAST_COUPON_ORDER_DATE || '',
+};
+
+// Sort accessors — Shopify order level.
+const CP_SHOP_ORD_FNS = {
+  order:      r => String(r.ORDER_NAME || r.ORDER_ID || '').toLowerCase(),
+  date:       r => r.ORDER_DATE || '',
+  sku:        r => String(r.SKU || '').toLowerCase(),
+  supplier:   r => (cpSupplier(r.SKU) || '').toLowerCase(),
+  qty:        r => Number(r.ORDER_QTY)             || 0,
+  price:      r => Number(r.PRICE)                 || 0,
+  discount:   r => Number(r.EST_COUPON_DISCOUNT)   || 0,
+  order_disc: r => Number(r.ORDER_TOTAL_DISCOUNTS) || 0,
+  sales:      r => Number(r.ORDER_PRODUCT_SALES)   || 0,
+  margin:     r => Number(r.ORDER_MARGIN)          || 0,
+  profit:     r => Number(r.ORDER_PROFIT)          || 0,
+};
 
 // ── Load (lazy, first visit only) ────────────────────────────────────────────
 
@@ -194,6 +340,7 @@ window.setCouponShopLevel = setCouponShopLevel;
 
 function renderCouponPage() {
   cpEnsureSuppliers();
+  cpPopulateSupplierSel();
   if ((S.couponPlatform || 'amazon') === 'shopify') {
     if (!S.couponShopSku || !S.couponShopOrder) { loadCouponShopData(); return; }
     renderCouponShopify();
@@ -211,8 +358,6 @@ window.renderCouponPage = renderCouponPage;
 
 function renderCouponSkuTable() {
   const data      = getCouponSkuFiltered();
-  const sortBy    = (document.getElementById('couponSkuSort') || {}).value || 'order_date';
-  const sortDir   = (document.getElementById('couponSkuDir')  || {}).value || 'desc';
   const searchRaw = (document.getElementById('couponSkuSearch') || {}).value || '';
   const query     = searchRaw.trim().toLowerCase();
 
@@ -223,47 +368,29 @@ function renderCouponSkuTable() {
   document.getElementById('couponHead').innerHTML = `
     <tr>
       <th style="text-align:right;min-width:40px;width:40px;">#</th>
-      <th style="text-align:left;min-width:130px;">SKU</th>
-      <th style="text-align:left;min-width:110px;">Supplier</th>
-      <th style="min-width:100px;">Order Date</th>
-      <th style="min-width:70px;">Qty</th>
-      <th style="min-width:115px;">Product Sales</th>
-      <th style="min-width:110px;">Margin</th>
-      <th style="min-width:105px;">Coupon Fee</th>
-      <th style="min-width:100px;">Shipping Fee</th>
-      <th style="min-width:100px;">Dropship Fee</th>
-      <th style="min-width:110px;">New Margin</th>
-      <th style="min-width:105px;">Profit</th>
-      <th style="min-width:90px;">Refund Qty</th>
-      <th style="min-width:105px;">Refund Amt</th>
-      <th style="min-width:80px;">Net Qty</th>
-      <th style="min-width:110px;">Net Profit</th>
-      <th style="min-width:95px;">Unit Cost</th>
+      ${cpTh('a_sku', 'sku', 'SKU', { align: 'left', min: '130px' })}
+      ${cpTh('a_sku', 'supplier', 'Supplier', { align: 'left', min: '110px' })}
+      ${cpTh('a_sku', 'order_date', 'Order Date', { min: '100px' })}
+      ${cpTh('a_sku', 'qty', 'Qty', { min: '70px' })}
+      ${cpTh('a_sku', 'product_sales', 'Product Sales', { min: '115px' })}
+      ${cpTh('a_sku', 'margin', 'Margin', { min: '110px' })}
+      ${cpTh('a_sku', 'coupon_fee', 'Coupon Fee', { min: '105px' })}
+      ${cpTh('a_sku', 'shipping_fee', 'Shipping Fee', { min: '100px' })}
+      ${cpTh('a_sku', 'dropship_fee', 'Dropship Fee', { min: '100px' })}
+      ${cpTh('a_sku', 'new_margin', 'New Margin', { min: '110px' })}
+      ${cpTh('a_sku', 'profit', 'Profit', { min: '105px' })}
+      ${cpTh('a_sku', 'refund_qty', 'Refund Qty', { min: '90px' })}
+      ${cpTh('a_sku', 'refund_amt', 'Refund Amt', { min: '105px' })}
+      ${cpTh('a_sku', 'net_qty', 'Net Qty', { min: '80px' })}
+      ${cpTh('a_sku', 'net_profit', 'Net Profit', { min: '110px' })}
+      ${cpTh('a_sku', 'unit_cost', 'Unit Cost', { min: '95px' })}
     </tr>`;
 
   let rows = [...data];
 
   if (query) rows = rows.filter(r => (r.SKU || '').toLowerCase().includes(query));
 
-  const sortFn = {
-    order_date:    r => r.ORDER_DATE || '',
-    sku:           r => r.SKU || '',
-    qty:           r => Number(r.ORDER_QTY)           || 0,
-    product_sales: r => Number(r.ORDER_PRODUCT_SALES) || 0,
-    coupon_fee:    r => Number(r.ORDER_COUPON_FEE)    || 0,
-    new_margin:    r => Number(r.ORDER_NEW_MARGIN)    || 0,
-    margin:        r => Number(r.ORDER_MARGIN)        || 0,
-    profit:        r => Number(r.ORDER_PROFIT)        || 0,
-    refund_qty:    r => Number(r.REFUND_QTY)          || 0,
-    net_profit:    r => Number(r.NET_PROFIT)          || 0,
-  }[sortBy] || (r => r.ORDER_DATE || '');
-
-  rows.sort((a, b) => {
-    const va = sortFn(a), vb = sortFn(b);
-    if (va < vb) return sortDir === 'asc' ? -1 : 1;
-    if (va > vb) return sortDir === 'asc' ?  1 : -1;
-    return 0;
-  });
+  rows = cpSortRows(rows, 'a_sku', CP_AMZ_FNS);
 
   const tbody = document.getElementById('couponBody');
   if (!rows.length) {
@@ -306,8 +433,6 @@ function renderCouponSkuTable() {
 
 function renderCouponOrderTable() {
   const data     = getCouponOrderFiltered();
-  const sortBy   = (document.getElementById('couponOrdSort') || {}).value || 'order_date';
-  const sortDir  = (document.getElementById('couponOrdDir')  || {}).value || 'desc';
   const searchRaw = (document.getElementById('couponOrdSearch') || {}).value || '';
   const query    = searchRaw.trim().toLowerCase();
 
@@ -318,22 +443,22 @@ function renderCouponOrderTable() {
   document.getElementById('couponHead').innerHTML = `
     <tr>
       <th style="text-align:right;min-width:40px;width:40px;">#</th>
-      <th style="text-align:left;min-width:185px;">Order ID</th>
-      <th style="text-align:left;min-width:130px;">SKU</th>
-      <th style="text-align:left;min-width:110px;">Supplier</th>
-      <th style="min-width:100px;">Order Date</th>
-      <th style="min-width:60px;">Qty</th>
-      <th style="min-width:115px;">Product Sales</th>
-      <th style="min-width:110px;">Margin</th>
-      <th style="min-width:105px;">Coupon Fee</th>
-      <th style="min-width:100px;">Shipping Fee</th>
-      <th style="min-width:100px;">Dropship Fee</th>
-      <th style="min-width:110px;">New Margin</th>
-      <th style="min-width:105px;">Profit</th>
-      <th style="min-width:90px;">Refund Qty</th>
-      <th style="min-width:105px;">Refund Amt</th>
-      <th style="min-width:110px;">Net Profit</th>
-      <th style="min-width:95px;">Unit Cost</th>
+      ${cpTh('a_ord', 'order_id', 'Order ID', { align: 'left', min: '185px' })}
+      ${cpTh('a_ord', 'sku', 'SKU', { align: 'left', min: '130px' })}
+      ${cpTh('a_ord', 'supplier', 'Supplier', { align: 'left', min: '110px' })}
+      ${cpTh('a_ord', 'order_date', 'Order Date', { min: '100px' })}
+      ${cpTh('a_ord', 'qty', 'Qty', { min: '60px' })}
+      ${cpTh('a_ord', 'product_sales', 'Product Sales', { min: '115px' })}
+      ${cpTh('a_ord', 'margin', 'Margin', { min: '110px' })}
+      ${cpTh('a_ord', 'coupon_fee', 'Coupon Fee', { min: '105px' })}
+      ${cpTh('a_ord', 'shipping_fee', 'Shipping Fee', { min: '100px' })}
+      ${cpTh('a_ord', 'dropship_fee', 'Dropship Fee', { min: '100px' })}
+      ${cpTh('a_ord', 'new_margin', 'New Margin', { min: '110px' })}
+      ${cpTh('a_ord', 'profit', 'Profit', { min: '105px' })}
+      ${cpTh('a_ord', 'refund_qty', 'Refund Qty', { min: '90px' })}
+      ${cpTh('a_ord', 'refund_amt', 'Refund Amt', { min: '105px' })}
+      ${cpTh('a_ord', 'net_profit', 'Net Profit', { min: '110px' })}
+      ${cpTh('a_ord', 'unit_cost', 'Unit Cost', { min: '95px' })}
     </tr>`;
 
   let rows = [...data];
@@ -345,22 +470,7 @@ function renderCouponOrderTable() {
     );
   }
 
-  const sortFn = {
-    order_date: r => r.ORDER_DATE || '',
-    sku:        r => r.SKU || '',
-    qty:        r => Number(r.ORDER_QTY)           || 0,
-    sales:      r => Number(r.ORDER_PRODUCT_SALES) || 0,
-    coupon_fee: r => Number(r.ORDER_COUPON_FEE)    || 0,
-    profit:     r => Number(r.ORDER_PROFIT)        || 0,
-    net_profit: r => Number(r.NET_PROFIT)          || 0,
-  }[sortBy] || (r => r.ORDER_DATE || '');
-
-  rows.sort((a, b) => {
-    const va = sortFn(a), vb = sortFn(b);
-    if (va < vb) return sortDir === 'asc' ? -1 : 1;
-    if (va > vb) return sortDir === 'asc' ?  1 : -1;
-    return 0;
-  });
+  rows = cpSortRows(rows, 'a_ord', CP_AMZ_FNS);
 
   const tbody = document.getElementById('couponBody');
   if (!rows.length) {
@@ -465,7 +575,7 @@ function getCouponShopFiltered() {
       String(r.ORDER_NAME || '').toLowerCase().includes(query) ||
       String(r.ORDER_ID || '').toLowerCase().includes(query));
   }
-  return rows;
+  return cpSupplierFilter(rows);
 }
 window.getCouponShopFiltered = getCouponShopFiltered;
 
@@ -497,38 +607,14 @@ function cpShopSummary() {
 function renderCouponShopify() {
   cpShopSummary();
   const level = S.couponShopLevel || 'sku';
-  const sortBy  = (document.getElementById('couponShopSort') || {}).value || 'profit';
-  const sortDir = (document.getElementById('couponShopDir')  || {}).value || 'desc';
   const searchRaw = String(((document.getElementById('couponShopSearch') || {}).value || '')).trim();
   const clrBtn = document.getElementById('couponShopSearchClear');
   if (clrBtn) clrBtn.style.display = searchRaw ? '' : 'none';
 
   let rows = getCouponShopFiltered();
-
-  const sortFn = level === 'sku' ? {
-    profit:   r => Number(r.ORDER_PROFIT)         || 0,
-    sales:    r => Number(r.ORDER_PRODUCT_SALES)  || 0,
-    qty:      r => Number(r.ORDER_QTY)            || 0,
-    discount: r => Number(r.EST_COUPON_DISCOUNT)  || 0,
-    pct:      r => Number(r.GROUP_PCT)            || 0,
-    date:     r => r.LAST_COUPON_ORDER_DATE || '',
-    sku:      r => r.SKU || '',
-  }[sortBy] : {
-    profit:   r => Number(r.ORDER_PROFIT)         || 0,
-    sales:    r => Number(r.ORDER_PRODUCT_SALES)  || 0,
-    qty:      r => Number(r.ORDER_QTY)            || 0,
-    discount: r => Number(r.EST_COUPON_DISCOUNT)  || 0,
-    pct:      r => Number(r.GROUP_PCT)            || 0,
-    date:     r => r.ORDER_DATE || '',
-    sku:      r => r.SKU || '',
-  }[sortBy];
-  const fn = sortFn || (r => Number(r.ORDER_PROFIT) || 0);
-  rows = [...rows].sort((a, b) => {
-    const va = fn(a), vb = fn(b);
-    if (va < vb) return sortDir === 'asc' ? -1 : 1;
-    if (va > vb) return sortDir === 'asc' ?  1 : -1;
-    return 0;
-  });
+  rows = level === 'sku'
+    ? cpSortRows(rows, 's_sku', CP_SHOP_SKU_FNS)
+    : cpSortRows(rows, 's_ord', CP_SHOP_ORD_FNS);
 
   if (level === 'sku') renderCouponShopSkuTable(rows, searchRaw);
   else renderCouponShopOrderTable(rows, searchRaw);
@@ -547,19 +633,19 @@ function renderCouponShopSkuTable(rows, searchRaw) {
   document.getElementById('couponHead').innerHTML = `
     <tr>
       <th style="text-align:right;min-width:40px;width:40px;">#</th>
-      <th style="text-align:left;min-width:150px;">SKU</th>
-      <th style="text-align:left;min-width:110px;">Supplier</th>
-      <th style="min-width:75px;">Discount</th>
-      <th style="min-width:100px;">Price @ Push</th>
-      <th style="min-width:95px;">Unit Cost</th>
-      <th style="min-width:95px;">Avail @ Push</th>
-      <th style="min-width:75px;">Orders</th>
-      <th style="min-width:80px;">Qty Sold</th>
-      <th style="min-width:115px;">Product Sales</th>
-      <th style="min-width:110px;">Est Coupon $</th>
-      <th style="min-width:110px;">Margin</th>
-      <th style="min-width:105px;">Profit</th>
-      <th style="min-width:105px;">Last Order</th>
+      ${cpTh('s_sku', 'sku', 'SKU', { align: 'left', min: '150px' })}
+      ${cpTh('s_sku', 'supplier', 'Supplier', { align: 'left', min: '110px' })}
+      ${cpTh('s_sku', 'pct', 'Discount', { min: '75px' })}
+      ${cpTh('s_sku', 'price_push', 'Price @ Push', { min: '100px' })}
+      ${cpTh('s_sku', 'unit_cost', 'Unit Cost', { min: '95px' })}
+      ${cpTh('s_sku', 'avail', 'Avail @ Push', { min: '95px' })}
+      ${cpTh('s_sku', 'orders', 'Orders', { min: '75px' })}
+      ${cpTh('s_sku', 'qty', 'Qty Sold', { min: '80px' })}
+      ${cpTh('s_sku', 'sales', 'Product Sales', { min: '115px' })}
+      ${cpTh('s_sku', 'discount', 'Est Coupon $', { min: '110px' })}
+      ${cpTh('s_sku', 'margin', 'Margin', { min: '110px' })}
+      ${cpTh('s_sku', 'profit', 'Profit', { min: '105px' })}
+      ${cpTh('s_sku', 'date', 'Last Order', { min: '105px' })}
     </tr>`;
   const tbody = document.getElementById('couponBody');
   if (!rows.length) {
@@ -595,17 +681,17 @@ function renderCouponShopOrderTable(rows, searchRaw) {
   document.getElementById('couponHead').innerHTML = `
     <tr>
       <th style="text-align:right;min-width:40px;width:40px;">#</th>
-      <th style="text-align:left;min-width:110px;">Order</th>
-      <th style="min-width:100px;">Order Date</th>
-      <th style="text-align:left;min-width:150px;">SKU</th>
-      <th style="text-align:left;min-width:110px;">Supplier</th>
-      <th style="min-width:60px;">Qty</th>
-      <th style="min-width:90px;">Price</th>
-      <th style="min-width:110px;">Est Coupon $</th>
-      <th style="min-width:120px;">Order Discount $</th>
-      <th style="min-width:115px;">Product Sales</th>
-      <th style="min-width:110px;">Margin</th>
-      <th style="min-width:105px;">Profit</th>
+      ${cpTh('s_ord', 'order', 'Order', { align: 'left', min: '110px' })}
+      ${cpTh('s_ord', 'date', 'Order Date', { min: '100px' })}
+      ${cpTh('s_ord', 'sku', 'SKU', { align: 'left', min: '150px' })}
+      ${cpTh('s_ord', 'supplier', 'Supplier', { align: 'left', min: '110px' })}
+      ${cpTh('s_ord', 'qty', 'Qty', { min: '60px' })}
+      ${cpTh('s_ord', 'price', 'Price', { min: '90px' })}
+      ${cpTh('s_ord', 'discount', 'Est Coupon $', { min: '110px' })}
+      ${cpTh('s_ord', 'order_disc', 'Order Discount $', { min: '120px' })}
+      ${cpTh('s_ord', 'sales', 'Product Sales', { min: '115px' })}
+      ${cpTh('s_ord', 'margin', 'Margin', { min: '110px' })}
+      ${cpTh('s_ord', 'profit', 'Profit', { min: '105px' })}
     </tr>`;
   const tbody = document.getElementById('couponBody');
   if (!rows.length) {
