@@ -153,22 +153,92 @@ function populateForecastManufacturers() {
   if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
 }
 
+// Category multi-select (Shopify product_type). S.invCatSel = Set of selected
+// values ('' empty set = All); '__unknown__' = rows with no category.
+function invCatSel() { return (S.invCatSel = S.invCatSel || new Set()); }
+
 function populateForecastCategories() {
-  const sel = document.getElementById('forecastCategory');
-  if (!sel) return;
+  const panel = document.getElementById('forecastCategoryPanel');
+  if (!panel) return;
   let hasUnknown = false;
-  const counts = {};
+  const set = new Set();
   (S.inventoryForecast || []).forEach(r => {
     const c = String(r.CATEGORY || '').trim();
-    if (c) counts[c] = (counts[c] || 0) + 1; else hasUnknown = true;
+    if (c) set.add(c); else hasUnknown = true;
   });
-  const opts = Object.keys(counts).sort((a, b) => a.localeCompare(b));
-  const prev = sel.value;
-  sel.innerHTML = `<option value="">All</option>` +
-    opts.map(c => `<option value="${c.replace(/"/g, '&quot;')}">${c}</option>`).join('') +
-    (hasUnknown ? `<option value="__unknown__">Unknown</option>` : '');
-  if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+  const opts = [...set].sort((a, b) => a.localeCompare(b));
+  if (hasUnknown) opts.push('__unknown__');
+  S._invCatOpts = opts;
+  const sel = invCatSel();
+  panel.innerHTML = `
+    <input id="forecastCategorySearch" type="text" placeholder="Filter…" oninput="invCatSearch(this.value)"
+      style="width:100%;box-sizing:border-box;margin-bottom:6px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg);color:var(--text);"/>
+    <div style="display:flex;gap:10px;margin-bottom:6px;font-size:11px;">
+      <a href="#" onclick="invCatClear();return false;" style="color:#0ea5e9;">Clear (All)</a>
+      <span id="forecastCategoryCount" style="color:var(--text3);"></span>
+    </div>
+    <div id="forecastCategoryList" style="max-height:260px;overflow:auto;">` +
+    opts.map((c, i) => `
+      <label style="display:flex;align-items:center;gap:6px;padding:3px 2px;font-size:12px;color:var(--text);cursor:pointer;">
+        <input type="checkbox" data-cat-i="${i}" ${sel.has(c) ? 'checked' : ''} onchange="invCatToggle(${i}, this.checked)"/>
+        <span>${c === '__unknown__' ? 'Unknown' : escHtml(c)}</span>
+      </label>`).join('') +
+    `</div>`;
+  invCatLabel();
 }
+
+function invCatToggle(i, on) {
+  const v = (S._invCatOpts || [])[i];
+  if (v == null) return;
+  const sel = invCatSel();
+  if (on) sel.add(v); else sel.delete(v);
+  invCatLabel();
+  renderInventoryPage();
+}
+
+function invCatClear() {
+  invCatSel().clear();
+  const list = document.getElementById('forecastCategoryList');
+  if (list) list.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = false; });
+  invCatLabel();
+  renderInventoryPage();
+}
+
+function invCatLabel() {
+  const btn = document.getElementById('forecastCategoryBtn');
+  const cnt = document.getElementById('forecastCategoryCount');
+  const n = invCatSel().size;
+  if (btn) btn.textContent = n ? `Category: ${n} selected ▾` : 'Category: All ▾';
+  if (cnt) cnt.textContent = n ? `${n} selected` : '';
+}
+
+function invCatSearch(q) {
+  const list = document.getElementById('forecastCategoryList');
+  if (!list) return;
+  const needle = String(q || '').trim().toLowerCase();
+  list.querySelectorAll('label').forEach(lb => {
+    lb.style.display = !needle || lb.textContent.toLowerCase().includes(needle) ? 'flex' : 'none';
+  });
+}
+
+function toggleForecastCategoryPanel(ev) {
+  ev.stopPropagation();
+  const panel = document.getElementById('forecastCategoryPanel');
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  if (!open && !S._invCatCloser) {
+    S._invCatCloser = true;
+    document.addEventListener('click', e => {
+      const wrap = document.getElementById('forecastCategoryWrap');
+      if (wrap && !wrap.contains(e.target)) panel.style.display = 'none';
+    });
+  }
+}
+window.invCatToggle = invCatToggle;
+window.invCatClear = invCatClear;
+window.invCatSearch = invCatSearch;
+window.toggleForecastCategoryPanel = toggleForecastCategoryPanel;
 
 function statusBadge(status) {
   const s = String(status || '');
@@ -261,7 +331,7 @@ function renderForecastTable() {
   const horizonN = invHorizonN();
   const status   = (document.getElementById('forecastStatus')  || {}).value || '';
   const manufacturer = (document.getElementById('forecastManufacturer') || {}).value || '';
-  const category = (document.getElementById('forecastCategory') || {}).value || '';
+  const catSel = invCatSel();
   const searchRaw = (document.getElementById('forecastSearch') || {}).value || '';
   const query    = searchRaw.trim().toLowerCase();
 
@@ -312,11 +382,12 @@ function renderForecastTable() {
     rows = rows.filter(r => String(r.MANUFACTURER || '') === manufacturer);
   }
 
-  // Filter by category (Shopify product_type via MASTER_COST.CATEGORY)
-  if (category === '__unknown__') {
-    rows = rows.filter(r => !r.CATEGORY || !String(r.CATEGORY).trim());
-  } else if (category) {
-    rows = rows.filter(r => String(r.CATEGORY || '') === category);
+  // Filter by category multi-select (Shopify product_type via MASTER_COST.CATEGORY)
+  if (catSel.size) {
+    rows = rows.filter(r => {
+      const c = String(r.CATEGORY || '').trim();
+      return c ? catSel.has(c) : catSel.has('__unknown__');
+    });
   }
 
   // Search

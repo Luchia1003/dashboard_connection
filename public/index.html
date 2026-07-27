@@ -847,9 +847,10 @@
             <option value="">All</option>
           </select>
           <span style="font-size:12px;color:var(--text3);">Category</span>
-          <select id="forecastCategory" class="ctrl-sel" style="min-width:130px;" onchange="renderInventoryPage()" title="Shopify product type">
-            <option value="">All</option>
-          </select>
+          <div id="forecastCategoryWrap" style="position:relative;display:inline-block;">
+            <button id="forecastCategoryBtn" type="button" class="ctrl-sel" style="min-width:140px;text-align:left;cursor:pointer;" onclick="toggleForecastCategoryPanel(event)" title="Shopify product type — multi-select">Category: All ▾</button>
+            <div id="forecastCategoryPanel" style="display:none;position:absolute;top:110%;left:0;z-index:60;background:var(--bg);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:8px;width:250px;"></div>
+          </div>
           <div style="width:1px;height:22px;background:var(--border);flex-shrink:0;"></div>
           <div style="display:flex;align-items:center;gap:5px;">
             <svg width="13" height="13" fill="none" stroke="currentColor" style="color:var(--text3);flex-shrink:0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35"/></svg>

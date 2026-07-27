@@ -350,11 +350,12 @@ function downloadInventoryCSV() {
     } else if (mfr) {
       rows = rows.filter(r => String(r.MANUFACTURER || '') === mfr);
     }
-    const cat = (document.getElementById('forecastCategory') || {}).value || '';
-    if (cat === '__unknown__') {
-      rows = rows.filter(r => !r.CATEGORY || !String(r.CATEGORY).trim());
-    } else if (cat) {
-      rows = rows.filter(r => String(r.CATEGORY || '') === cat);
+    const catSel = (S.invCatSel instanceof Set) ? S.invCatSel : new Set();
+    if (catSel.size) {
+      rows = rows.filter(r => {
+        const c = String(r.CATEGORY || '').trim();
+        return c ? catSel.has(c) : catSel.has('__unknown__');
+      });
     }
 
     const statusSlug = !statusRaw ? 'all'
