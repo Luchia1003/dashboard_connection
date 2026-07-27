@@ -31,6 +31,7 @@ async function loadInventoryData() {
     S.fbaAging          = await ar.json();
 
     populateForecastManufacturers();
+    populateForecastCategories();
     renderInventoryPage();
   } catch (err) {
     document.getElementById('inventoryBody').innerHTML =
@@ -152,6 +153,23 @@ function populateForecastManufacturers() {
   if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
 }
 
+function populateForecastCategories() {
+  const sel = document.getElementById('forecastCategory');
+  if (!sel) return;
+  let hasUnknown = false;
+  const counts = {};
+  (S.inventoryForecast || []).forEach(r => {
+    const c = String(r.CATEGORY || '').trim();
+    if (c) counts[c] = (counts[c] || 0) + 1; else hasUnknown = true;
+  });
+  const opts = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b));
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">All</option>` +
+    opts.map(c => `<option value="${c.replace(/"/g, '&quot;')}">${c}</option>`).join('') +
+    (hasUnknown ? `<option value="__unknown__">Unknown</option>` : '');
+  if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+
 function statusBadge(status) {
   const s = String(status || '');
   if (s === 'Out of Stock')    return `<span class="badge-down" style="font-size:10px;padding:2px 7px;border-radius:6px;font-weight:600;">${s}</span>`;
@@ -243,6 +261,7 @@ function renderForecastTable() {
   const horizonN = invHorizonN();
   const status   = (document.getElementById('forecastStatus')  || {}).value || '';
   const manufacturer = (document.getElementById('forecastManufacturer') || {}).value || '';
+  const category = (document.getElementById('forecastCategory') || {}).value || '';
   const searchRaw = (document.getElementById('forecastSearch') || {}).value || '';
   const query    = searchRaw.trim().toLowerCase();
 
@@ -256,6 +275,7 @@ function renderForecastTable() {
       ${hdrTh('if', 'sku', 'SKU / Product', { align: 'left', min: '200px' })}
       <th style="min-width:110px;">Channel</th>
       ${hdrTh('if', 'manufacturer', 'Manufacturer', { align: 'left', min: '110px' })}
+      ${hdrTh('if', 'category', 'Category', { align: 'left', min: '110px' })}
       ${hdrTh('if', 'available', 'Available', { min: '90px' })}
       ${hdrTh('if', 'last_order', 'Last Order', { min: '110px' })}
       ${hdrTh('if', 'days_since_last_order', 'Days Since', { min: '80px' })}
@@ -292,6 +312,13 @@ function renderForecastTable() {
     rows = rows.filter(r => String(r.MANUFACTURER || '') === manufacturer);
   }
 
+  // Filter by category (Shopify product_type via MASTER_COST.CATEGORY)
+  if (category === '__unknown__') {
+    rows = rows.filter(r => !r.CATEGORY || !String(r.CATEGORY).trim());
+  } else if (category) {
+    rows = rows.filter(r => String(r.CATEGORY || '') === category);
+  }
+
   // Search
   if (query) {
     rows = rows.filter(r =>
@@ -303,6 +330,7 @@ function renderForecastTable() {
   rows = hdrSortRows(rows, 'if', {
     sku:                   r => String(r.ORIGINAL_SKU || '').toLowerCase(),
     manufacturer:          r => String(r.MANUFACTURER || '').toLowerCase(),
+    category:              r => String(r.CATEGORY || '').toLowerCase(),
     last_order:            r => String(r.LAST_ORDER_DATE || ''),
     threshold:             r => r._fc.met,
     status:                r => r._fc.status,
@@ -329,7 +357,7 @@ function renderForecastTable() {
   const tbody = document.getElementById('inventoryBody');
   if (!rows.length) {
     const msg = query ? `No SKUs matching "${searchRaw}"` : 'No inventory rows for this channel';
-    tbody.innerHTML = `<tr><td colspan="18" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="19" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
 
@@ -364,6 +392,7 @@ function renderForecastTable() {
       </td>
       <td style="text-align:right;">${channelChip(r.CHANNEL)}</td>
       <td style="text-align:left;">${manufacturerChip(r.MANUFACTURER)}</td>
+      <td style="text-align:left;font-size:11px;color:var(--text2);white-space:nowrap;">${r.CATEGORY ? escHtml(r.CATEGORY) : '<span style="color:var(--text3);">—</span>'}</td>
       <td style="text-align:right;"><span style="${V}color:${availColor};">${fmtInt(avail)}</span></td>
       <td style="text-align:right;font-size:12px;color:var(--text2);">${fmtDate(r.LAST_ORDER_DATE)}</td>
       <td style="text-align:right;"><span style="font-size:13px;font-weight:600;color:${daysColor};">${isNaN(days) ? '—' : days}</span></td>

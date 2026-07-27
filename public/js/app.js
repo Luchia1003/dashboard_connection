@@ -350,6 +350,12 @@ function downloadInventoryCSV() {
     } else if (mfr) {
       rows = rows.filter(r => String(r.MANUFACTURER || '') === mfr);
     }
+    const cat = (document.getElementById('forecastCategory') || {}).value || '';
+    if (cat === '__unknown__') {
+      rows = rows.filter(r => !r.CATEGORY || !String(r.CATEGORY).trim());
+    } else if (cat) {
+      rows = rows.filter(r => String(r.CATEGORY || '') === cat);
+    }
 
     const statusSlug = !statusRaw ? 'all'
       : statusRaw === 'threshold' ? 'threshold_met'
