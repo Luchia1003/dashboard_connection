@@ -217,6 +217,10 @@ function fcHorizonCalc(r, n) {
   }
   const cap = (Number(r.UNITS_90D) || 0) / 90 * days * 1.5;
   const fc = Math.ceil(Math.min(seasonal, cap));
+  const currPart = Math.round((Number(r.FC_CURR) || 0) * remain / currDays);
+  let monthsSum = 0;
+  for (let k = 1; k <= n; k++) monthsSum += Number(r['FC_M' + k]) || 0;
+  const capped = cap < seasonal;
   const avail = Number(r.AVAILABLE) || 0;
   const restock = Math.max(fc - avail, 0);
   const adu = Number(r.ADU_30D) || 0;
@@ -226,7 +230,7 @@ function fcHorizonCalc(r, n) {
   const ppu = Number(r.PROFIT_PER_UNIT);
   const cost = Number(r.UNIT_COST);
   return {
-    fc, restock, met, status, days,
+    fc, restock, met, status, days, currPart, monthsSum, capped,
     estProfit: isNaN(ppu) ? null : Math.round(ppu * restock * 100) / 100,
     estCost:   isNaN(cost) ? null : Math.round(cost * restock * 100) / 100,
   };
@@ -369,7 +373,9 @@ function renderForecastTable() {
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmtNum(adu30, 2)}</span></td>
       <td style="text-align:right;">
         <div style="${V}color:var(--text);">${fmtInt(fc60d)}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:1px;">curr ${fmtInt(r.FORECAST_CURR_MONTH)} · next ${fmtInt(r.FORECAST_NEXT_MONTH)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:1px;">${r._fc.currPart != null
+          ? `mo left ${fmtInt(r._fc.currPart)} · +${horizonN} mo ${fmtInt(r._fc.monthsSum)}${r._fc.capped ? ' · <span style="color:#f59e0b;">capped</span>' : ''}`
+          : `curr ${fmtInt(r.FORECAST_CURR_MONTH)} · next ${fmtInt(r.FORECAST_NEXT_MONTH)}`}</div>
       </td>
       <td style="text-align:right;"><span style="${V}color:${needColor};">${fmtInt(restockNeed)}</span></td>
       <td style="text-align:right;"><span style="${V}color:${ppuColor};">${ppuMissing ? '—' : fmt(ppuNum)}</span></td>
