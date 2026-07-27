@@ -162,7 +162,7 @@ function populateForecastCategories() {
     const c = String(r.CATEGORY || '').trim();
     if (c) counts[c] = (counts[c] || 0) + 1; else hasUnknown = true;
   });
-  const opts = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b));
+  const opts = Object.keys(counts).sort((a, b) => a.localeCompare(b));
   const prev = sel.value;
   sel.innerHTML = `<option value="">All</option>` +
     opts.map(c => `<option value="${c.replace(/"/g, '&quot;')}">${c}</option>`).join('') +
