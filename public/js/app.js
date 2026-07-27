@@ -325,13 +325,24 @@ function downloadInventoryCSV() {
     const channel   = (chSel && chSel.value) || 'total';
     const statusRaw = (stSel && stSel.value) || '';
 
+    const horizonN = (typeof invHorizonN === 'function') ? invHorizonN() : 2;
     let rows = (S.inventoryForecast || []).filter(
       r => String(r.CHANNEL || '').toLowerCase() === channel
     );
+    // derived horizon columns (same math as the table view)
+    rows = rows.map(r => {
+      const d = (typeof fcHorizonCalc === 'function') ? fcHorizonCalc(r, horizonN) : null;
+      if (!d) return r;
+      return { ...r,
+        FC_HORIZON_MONTHS: horizonN, FC_HORIZON_DAYS: d.days,
+        FC_HORIZON: d.fc, RESTOCK_NEEDED_HORIZON: d.restock,
+        THRESHOLD_MET_HORIZON: d.met, STATUS_HORIZON: d.status,
+        EST_RESTOCK_PROFIT_HORIZON: d.estProfit, EST_RESTOCK_COST_HORIZON: d.estCost };
+    });
     if (statusRaw === 'threshold') {
-      rows = rows.filter(r => String(r.RESTOCK_THRESHOLD_MET || '') === 'Y');
+      rows = rows.filter(r => String(r.THRESHOLD_MET_HORIZON || r.RESTOCK_THRESHOLD_MET || '') === 'Y');
     } else if (statusRaw) {
-      rows = rows.filter(r => String(r.INVENTORY_STATUS || '') === statusRaw);
+      rows = rows.filter(r => String(r.STATUS_HORIZON || r.INVENTORY_STATUS || '') === statusRaw);
     }
     const mfr = (document.getElementById('forecastManufacturer') || {}).value || '';
     if (mfr === '__unknown__') {

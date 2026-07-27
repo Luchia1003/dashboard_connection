@@ -819,6 +819,21 @@
             <option value="amazon_nonfba">Amazon Non-FBA</option>
             <option value="shopify">Shopify</option>
           </select>
+          <span style="font-size:12px;color:var(--text3);">Forecast</span>
+          <select id="forecastHorizon" class="ctrl-sel" onchange="renderInventoryPage()" title="Forecast window = rest of the current month + N full months">
+            <option value="1">Month left + 1 mo</option>
+            <option value="2" selected>Month left + 2 mo</option>
+            <option value="3">Month left + 3 mo</option>
+            <option value="4">Month left + 4 mo</option>
+            <option value="5">Month left + 5 mo</option>
+            <option value="6">Month left + 6 mo</option>
+            <option value="7">Month left + 7 mo</option>
+            <option value="8">Month left + 8 mo</option>
+            <option value="9">Month left + 9 mo</option>
+            <option value="10">Month left + 10 mo</option>
+            <option value="11">Month left + 11 mo</option>
+            <option value="12">Month left + 12 mo</option>
+          </select>
           <span style="font-size:12px;color:var(--text3);">Status</span>
           <select id="forecastStatus" class="ctrl-sel" onchange="renderInventoryPage()">
             <option value="">All</option>

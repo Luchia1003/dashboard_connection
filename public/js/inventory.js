@@ -183,10 +183,60 @@ function priorityBadge(p) {
   return `<span style="font-size:10px;padding:2px 7px;border-radius:6px;font-weight:600;white-space:nowrap;color:${sty.fg};background:${sty.bg};border:1px solid ${sty.bd};">${s}</span>`;
 }
 
+// ── Selectable forecast horizon ──────────────────────────────────────────────
+// Horizon = rest of the current month (pro-rated from FC_CURR) + N full future
+// months (FC_M1..FC_MN). Mirrors the proc's 60d construction; N=2 ~ the old
+// FC 60d. ADU cap and thresholds scale with the horizon's real calendar days.
+function invHorizonN() {
+  const v = parseInt((document.getElementById('forecastHorizon') || {}).value, 10);
+  return (v >= 1 && v <= 12) ? v : 2;
+}
+
+function fcHorizonCalc(r, n) {
+  if (r.FC_CURR == null) {
+    // pre-migration row fallback: behave like the stored 60d columns
+    return {
+      fc: Number(r.FORECAST_60D) || 0,
+      restock: Number(r.RESTOCK_NEEDED) || 0,
+      met: String(r.RESTOCK_THRESHOLD_MET || ''),
+      status: String(r.INVENTORY_STATUS || ''),
+      estProfit: r.EST_RESTOCK_PROFIT, estCost: r.EST_RESTOCK_COST, days: 60,
+    };
+  }
+  const today = new Date();
+  const y = today.getFullYear(), m = today.getMonth();
+  const dim = (yy, mm) => new Date(yy, mm + 1, 0).getDate();
+  const currDays = dim(y, m);
+  const remain = currDays - today.getDate() + 1;
+  let seasonal = (Number(r.FC_CURR) || 0) * remain / currDays;
+  let days = remain;
+  for (let k = 1; k <= n; k++) {
+    seasonal += Number(r['FC_M' + k]) || 0;
+    const d = new Date(y, m + k, 1);
+    days += dim(d.getFullYear(), d.getMonth());
+  }
+  const cap = (Number(r.UNITS_90D) || 0) / 90 * days * 1.5;
+  const fc = Math.ceil(Math.min(seasonal, cap));
+  const avail = Number(r.AVAILABLE) || 0;
+  const restock = Math.max(fc - avail, 0);
+  const adu = Number(r.ADU_30D) || 0;
+  const baseThr = adu >= 3 ? 30 : adu >= 1 ? 15 : adu >= 0.1 ? 7 : 3;   // 60d-calibrated tiers
+  const met = restock > baseThr * days / 60 ? 'Y' : 'N';
+  const status = avail === 0 ? 'Out of Stock' : restock > 0 ? 'Restock Needed' : 'Sufficient';
+  const ppu = Number(r.PROFIT_PER_UNIT);
+  const cost = Number(r.UNIT_COST);
+  return {
+    fc, restock, met, status, days,
+    estProfit: isNaN(ppu) ? null : Math.round(ppu * restock * 100) / 100,
+    estCost:   isNaN(cost) ? null : Math.round(cost * restock * 100) / 100,
+  };
+}
+
 // ── Forecast Table ───────────────────────────────────────────────────────────
 
 function renderForecastTable() {
   const channel  = (document.getElementById('forecastChannel') || {}).value || 'total';
+  const horizonN = invHorizonN();
   const status   = (document.getElementById('forecastStatus')  || {}).value || '';
   const manufacturer = (document.getElementById('forecastManufacturer') || {}).value || '';
   const searchRaw = (document.getElementById('forecastSearch') || {}).value || '';
@@ -209,7 +259,7 @@ function renderForecastTable() {
       ${hdrTh('if', 'units_60d', 'Units 60d', { min: '80px' })}
       ${hdrTh('if', 'units_90d', 'Units 90d', { min: '80px' })}
       ${hdrTh('if', 'adu_30d', 'ADU 30d', { min: '80px' })}
-      ${hdrTh('if', 'forecast_60d', 'FC 60d', { min: '100px' })}
+      ${hdrTh('if', 'forecast_60d', `FC (mo left + ${horizonN} mo)`, { min: '100px' })}
       ${hdrTh('if', 'restock_needed', 'Restock Need', { min: '110px' })}
       ${hdrTh('if', 'profit_per_unit', 'Profit / Unit', { min: '100px' })}
       ${hdrTh('if', 'est_restock_profit', 'Est Restock Profit', { min: '120px' })}
@@ -221,11 +271,14 @@ function renderForecastTable() {
   // Filter by channel
   let rows = (S.inventoryForecast || []).filter(r => String(r.CHANNEL || '').toLowerCase() === channel);
 
+  // Derived horizon forecast per row (drives FC/restock/threshold/status below)
+  rows.forEach(r => { r._fc = fcHorizonCalc(r, horizonN); });
+
   // Filter by status
   if (status === 'threshold') {
-    rows = rows.filter(r => String(r.RESTOCK_THRESHOLD_MET || '') === 'Y');
+    rows = rows.filter(r => r._fc.met === 'Y');
   } else if (status) {
-    rows = rows.filter(r => String(r.INVENTORY_STATUS || '') === status);
+    rows = rows.filter(r => r._fc.status === status);
   }
 
   // Filter by manufacturer ('__unknown__' = null/blank in MASTER_COST)
@@ -247,16 +300,16 @@ function renderForecastTable() {
     sku:                   r => String(r.ORIGINAL_SKU || '').toLowerCase(),
     manufacturer:          r => String(r.MANUFACTURER || '').toLowerCase(),
     last_order:            r => String(r.LAST_ORDER_DATE || ''),
-    threshold:             r => String(r.RESTOCK_THRESHOLD_MET || ''),
-    status:                r => String(r.INVENTORY_STATUS || ''),
+    threshold:             r => r._fc.met,
+    status:                r => r._fc.status,
     available:             r => Number(r.AVAILABLE)            || 0,
     days_since_last_order: r => Number(r.DAYS_SINCE_LAST_ORDER) || 0,
     units_30d:             r => Number(r.UNITS_30D)            || 0,
     units_60d:             r => Number(r.UNITS_60D)            || 0,
     units_90d:             r => Number(r.UNITS_90D)            || 0,
     adu_30d:               r => Number(r.ADU_30D)              || 0,
-    forecast_60d:          r => Number(r.FORECAST_60D)         || 0,
-    restock_needed:        r => Number(r.RESTOCK_NEEDED)       || 0,
+    forecast_60d:          r => r._fc.fc,
+    restock_needed:        r => r._fc.restock,
     profit_per_unit:       r => Number(r.PROFIT_PER_UNIT)      || 0,
     est_restock_profit:    r => Number(r.EST_RESTOCK_PROFIT)   || 0,
     est_restock_cost:      r => Number(r.EST_RESTOCK_COST)     || 0,
@@ -265,7 +318,7 @@ function renderForecastTable() {
   // Meta
   const meta = document.getElementById('inventoryMeta');
   if (meta) {
-    const needCount = rows.filter(r => String(r.INVENTORY_STATUS) === 'Restock Needed' || String(r.INVENTORY_STATUS) === 'Out of Stock').length;
+    const needCount = rows.filter(r => r._fc.status === 'Restock Needed' || r._fc.status === 'Out of Stock').length;
     meta.textContent = `${rows.length.toLocaleString()} rows · ${needCount.toLocaleString()} need restock`;
   }
 
@@ -279,13 +332,13 @@ function renderForecastTable() {
   const V = 'font-size:14px;font-weight:700;';
   tbody.innerHTML = rows.map((r, i) => {
     const avail        = Number(r.AVAILABLE)        || 0;
-    const restockNeed  = Number(r.RESTOCK_NEEDED)   || 0;
-    const fc60d        = Number(r.FORECAST_60D)     || 0;
+    const restockNeed  = r._fc.restock;
+    const fc60d        = r._fc.fc;
     const adu30        = Number(r.ADU_30D)          || 0;
     const days         = Number(r.DAYS_SINCE_LAST_ORDER);
     const ppu          = r.PROFIT_PER_UNIT;
-    const estProfit    = r.EST_RESTOCK_PROFIT;
-    const estCost      = r.EST_RESTOCK_COST;
+    const estProfit    = r._fc.estProfit;
+    const estCost      = r._fc.estCost;
     const ppuNum       = Number(ppu);
     const estNum       = Number(estProfit);
     const estCostNum   = Number(estCost);
@@ -322,8 +375,8 @@ function renderForecastTable() {
       <td style="text-align:right;"><span style="${V}color:${ppuColor};">${ppuMissing ? '—' : fmt(ppuNum)}</span></td>
       <td style="text-align:right;"><span style="${V}color:${estColor};">${estMissing ? '—' : fmt(estNum)}</span></td>
       <td style="text-align:right;"><span style="${V}color:${estCostMissing ? 'var(--text3)' : 'var(--text)'};">${estCostMissing ? '—' : fmt(estCostNum)}</span></td>
-      <td style="text-align:right;">${thresholdBadge(r.RESTOCK_THRESHOLD_MET)}</td>
-      <td style="text-align:right;">${statusBadge(r.INVENTORY_STATUS)}</td>
+      <td style="text-align:right;">${thresholdBadge(r._fc.met)}</td>
+      <td style="text-align:right;">${statusBadge(r._fc.status)}</td>
     </tr>`;
   }).join('');
 }
