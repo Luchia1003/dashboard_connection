@@ -85,13 +85,15 @@ async function loadOrderDetailData() {
      </td></tr>`;
 
   try {
-    const r = await fetch('/api/order-detail');
-    if (r.status === 401) { window.location.href = '/login.html'; return; }
-    if (!r.ok) throw new Error(`Order Detail API: HTTP ${r.status}`);
-    S.orderDetail = await r.json();
+    S.orderDetail = await swrJSON('/api/order-detail', d => {
+      S.orderDetail = d;
+      populateOrderDetailDates();
+      if (S.page === 'orderDetail') renderOrderDetailPage();
+    });
     populateOrderDetailDates();
     renderOrderDetailPage();
   } catch (err) {
+    if (err.message === 'unauthorized') return; // swrJSON already redirected to login
     document.getElementById('orderDetailBody').innerHTML =
       `<tr><td colspan="13" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
   }

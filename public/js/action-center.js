@@ -214,6 +214,21 @@ async function acFetchJSON(url) {
   return r.json();
 }
 
+// Daily-refresh datasets go through the IndexedDB cache (cache.js): cached
+// copy renders instantly, and if the background revalidation finds new data,
+// `assign` re-runs and the page re-renders. informed-set-price stays on plain
+// acFetchJSON — it's a live read-after-write endpoint that must not be cached.
+function acFetchCached(url, assign) {
+  return swrJSON(url, d => {
+    assign(d);
+    S._acManuIdx = null;
+    const ready = Array.isArray(S.orderDetail) && Array.isArray(S.couponOrder) &&
+                  Array.isArray(S.couponSku)   && Array.isArray(S.sku) &&
+                  Array.isArray(S.inventoryForecast) && Array.isArray(S.invRecon);
+    if (ready) { acBuildInvIndexes(); if (S.page === 'action') renderActionCenterPage(); }
+  }).then(d => { assign(d); return d; });
+}
+
 async function loadActionCenterData() {
   const ready = Array.isArray(S.orderDetail) && Array.isArray(S.couponOrder) &&
                 Array.isArray(S.couponSku)   && Array.isArray(S.sku) &&
@@ -223,16 +238,16 @@ async function loadActionCenterData() {
   acRenderLoading();
   try {
     const jobs = [];
-    if (!Array.isArray(S.orderDetail)) jobs.push(acFetchJSON('/api/order-detail').then(d => { S.orderDetail = d; }));
-    if (!Array.isArray(S.couponOrder)) jobs.push(acFetchJSON('/api/coupon-order').then(d => { S.couponOrder = d; }));
-    if (!Array.isArray(S.couponSku))   jobs.push(acFetchJSON('/api/coupon-sku').then(d => { S.couponSku = d; }));
-    if (!Array.isArray(S.sku))         jobs.push(acFetchJSON('/api/sku').then(d => { S.sku = d; }));
+    if (!Array.isArray(S.orderDetail)) jobs.push(acFetchCached('/api/order-detail', d => { S.orderDetail = d; }));
+    if (!Array.isArray(S.couponOrder)) jobs.push(acFetchCached('/api/coupon-order', d => { S.couponOrder = d; }));
+    if (!Array.isArray(S.couponSku))   jobs.push(acFetchCached('/api/coupon-sku', d => { S.couponSku = d; }));
+    if (!Array.isArray(S.sku))         jobs.push(acFetchCached('/api/sku', d => { S.sku = d; }));
     // Inventory pool (current stock) + forecast (restock signal) — supplementary.
-    if (!Array.isArray(S.inventoryPool))     jobs.push(acFetchJSON('/api/inventory-pool').then(d => { S.inventoryPool = d; }).catch(() => { S.inventoryPool = []; }));
-    if (!Array.isArray(S.inventoryForecast)) jobs.push(acFetchJSON('/api/inventory-forecast').then(d => { S.inventoryForecast = d; }).catch(() => { S.inventoryForecast = []; }));
-    if (!Array.isArray(S.supplierMap))       jobs.push(acFetchJSON('/api/sku?suppliers=1').then(d => { S.supplierMap = d; }).catch(() => { S.supplierMap = []; }));
+    if (!Array.isArray(S.inventoryPool))     jobs.push(acFetchCached('/api/inventory-pool', d => { S.inventoryPool = d; }).catch(() => { S.inventoryPool = []; }));
+    if (!Array.isArray(S.inventoryForecast)) jobs.push(acFetchCached('/api/inventory-forecast', d => { S.inventoryForecast = d; }).catch(() => { S.inventoryForecast = []; }));
+    if (!Array.isArray(S.supplierMap))       jobs.push(acFetchCached('/api/sku?suppliers=1', d => { S.supplierMap = d; }).catch(() => { S.supplierMap = []; }));
     // Amazon ⟷ supplier master inventory reconciliation (Inventory Check tab).
-    if (!Array.isArray(S.invRecon)) jobs.push(acFetchJSON('/api/inventory-reconciliation').then(d => { S.invRecon = d; }).catch(() => { S.invRecon = []; }));
+    if (!Array.isArray(S.invRecon)) jobs.push(acFetchCached('/api/inventory-reconciliation', d => { S.invRecon = d; }).catch(() => { S.invRecon = []; }));
     await Promise.all(jobs);
     // The coupon page may have cached a supplier index from S.supplierMap alone —
     // rebuild it now that the forecast layer is available too.

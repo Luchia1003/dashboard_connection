@@ -19,21 +19,24 @@ async function loadInventoryData() {
      </td></tr>`;
 
   try {
-    const [fr, ar] = await Promise.all([
-      fetch('/api/inventory-forecast'),
-      fetch('/api/fba-aging'),
+    const [forecast, aging] = await Promise.all([
+      swrJSON('/api/inventory-forecast', d => {
+        S.inventoryForecast = d;
+        populateForecastManufacturers();
+        populateForecastCategories();
+        if (S.page === 'inventory') renderInventoryPage();
+      }),
+      swrJSON('/api/fba-aging', d => { S.fbaAging = d; if (S.page === 'inventory') renderInventoryPage(); }),
     ]);
-    if (fr.status === 401 || ar.status === 401) { window.location.href = '/login.html'; return; }
-    if (!fr.ok) throw new Error(`Inventory Forecast API: HTTP ${fr.status}`);
-    if (!ar.ok) throw new Error(`FBA Aging API: HTTP ${ar.status}`);
 
-    S.inventoryForecast = await fr.json();
-    S.fbaAging          = await ar.json();
+    S.inventoryForecast = forecast;
+    S.fbaAging          = aging;
 
     populateForecastManufacturers();
     populateForecastCategories();
     renderInventoryPage();
   } catch (err) {
+    if (err.message === 'unauthorized') return; // swrJSON already redirected to login
     document.getElementById('inventoryBody').innerHTML =
       `<tr><td colspan="18" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
   }

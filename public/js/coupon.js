@@ -82,8 +82,7 @@ function cpRefundCells(r) {
 function cpEnsureSuppliers() {
   if (Array.isArray(S.supplierMap) || S._cpSupLoading) return;
   S._cpSupLoading = true;
-  fetch('/api/sku?suppliers=1')
-    .then(r => (r.ok ? r.json() : []))
+  swrJSON('/api/sku?suppliers=1')
     .then(d => { S.supplierMap = Array.isArray(d) ? d : []; })
     .catch(() => { S.supplierMap = []; })
     .finally(() => { S._acManuIdx = null; renderCouponPage(); });
@@ -268,20 +267,18 @@ async function loadCouponData() {
      </td></tr>`;
 
   try {
-    const [sr, or_] = await Promise.all([
-      fetch('/api/coupon-sku'),
-      fetch('/api/coupon-order'),
+    const [couponSku, couponOrder] = await Promise.all([
+      swrJSON('/api/coupon-sku',   d => { S.couponSku = d;   populateCouponDates(); if (S.page === 'coupon') renderCouponPage(); }),
+      swrJSON('/api/coupon-order', d => { S.couponOrder = d; if (S.page === 'coupon') renderCouponPage(); }),
     ]);
-    if (sr.status === 401 || or_.status === 401) { window.location.href = '/login.html'; return; }
-    if (!sr.ok)  throw new Error(`Coupon SKU API: HTTP ${sr.status}`);
-    if (!or_.ok) throw new Error(`Coupon Order API: HTTP ${or_.status}`);
 
-    S.couponSku   = await sr.json();
-    S.couponOrder = await or_.json();
+    S.couponSku   = couponSku;
+    S.couponOrder = couponOrder;
 
     populateCouponDates();
     renderCouponPage();
   } catch (err) {
+    if (err.message === 'unauthorized') return; // swrJSON already redirected to login
     document.getElementById('couponBody').innerHTML =
       `<tr><td colspan="17" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
   }
@@ -551,17 +548,15 @@ async function loadCouponShopData() {
        <div>Loading Shopify coupon data…</div>
      </td></tr>`;
   try {
-    const [sr, or_] = await Promise.all([
-      fetch('/api/coupon-sku?window=shopify'),
-      fetch('/api/coupon-order?window=shopify'),
+    const [shopSku, shopOrder] = await Promise.all([
+      swrJSON('/api/coupon-sku?window=shopify',   d => { S.couponShopSku = d;   if (S.page === 'coupon') renderCouponPage(); }),
+      swrJSON('/api/coupon-order?window=shopify', d => { S.couponShopOrder = d; if (S.page === 'coupon') renderCouponPage(); }),
     ]);
-    if (sr.status === 401 || or_.status === 401) { window.location.href = '/login.html'; return; }
-    if (!sr.ok)  throw new Error(`Shopify coupon SKU API: HTTP ${sr.status}`);
-    if (!or_.ok) throw new Error(`Shopify coupon order API: HTTP ${or_.status}`);
-    S.couponShopSku   = await sr.json();
-    S.couponShopOrder = await or_.json();
+    S.couponShopSku   = shopSku;
+    S.couponShopOrder = shopOrder;
     renderCouponPage();
   } catch (err) {
+    if (err.message === 'unauthorized') return; // swrJSON already redirected to login
     document.getElementById('couponBody').innerHTML =
       `<tr><td colspan="14" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
   }

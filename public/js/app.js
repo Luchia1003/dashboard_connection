@@ -784,23 +784,35 @@ window.setYoyMetric = setYoyMetric;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
+// Background revalidation delivered fresher data (see cache.js) — refresh the
+// date-dependent chrome and re-render whatever page is showing.
+function refreshAfterDataUpdate() {
+  if (!Array.isArray(S.daily) || !Array.isArray(S.sku)) return;
+  const lastDate = S.daily[S.daily.length - 1]?.DATE;
+  document.getElementById('sidebarStatus').textContent = `Updated: ${lastDate || '–'}`;
+  populateMonths(S.daily);
+  rerender();
+}
+
 async function init() {
   try {
-    const [dr, sr, ir] = await Promise.all([
-      fetch('/api/daily'), fetch('/api/sku'), fetch('/api/inventory-pool'),
+    const [daily, sku, pool] = await Promise.all([
+      swrJSON('/api/daily', d => { S.daily = d; refreshAfterDataUpdate(); }),
+      swrJSON('/api/sku',   d => { S.sku   = d; refreshAfterDataUpdate(); }),
+      // Inventory pool is supplementary — never block the dashboard if it fails.
+      swrJSON('/api/inventory-pool', d => {
+        S.inventoryPool = Array.isArray(d) ? d : [];
+        buildInventoryIndex();
+        refreshAfterDataUpdate();
+      }).catch(() => []),
     ]);
-    if (dr.status === 401 || sr.status === 401) { window.location.href = '/login.html'; return; }
-    if (!dr.ok) throw new Error(`Daily API: HTTP ${dr.status}`);
-    if (!sr.ok) throw new Error(`SKU API: HTTP ${sr.status}`);
 
-    S.daily = await dr.json();
-    S.sku   = await sr.json();
+    S.daily = daily;
+    S.sku   = sku;
 
     if (!Array.isArray(S.daily) || !Array.isArray(S.sku)) throw new Error('Invalid API response');
 
-    // Inventory pool is supplementary — never block the dashboard if it fails.
-    S.inventoryPool = ir && ir.ok ? await ir.json().catch(() => []) : [];
-    if (!Array.isArray(S.inventoryPool)) S.inventoryPool = [];
+    S.inventoryPool = Array.isArray(pool) ? pool : [];
     buildInventoryIndex();
 
     const lastDate = S.daily[S.daily.length - 1]?.DATE;
@@ -817,6 +829,7 @@ async function init() {
     updateDownloadHints();
 
   } catch (err) {
+    if (err.message === 'unauthorized') return; // swrJSON already redirected to login
     console.error(err);
     document.getElementById('loadingOverlay').innerHTML = `
       <div style="text-align:center;padding:24px;">

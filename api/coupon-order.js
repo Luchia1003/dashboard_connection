@@ -1,25 +1,5 @@
-const snowflake = require('snowflake-sdk');
-const crypto = require('crypto');
+const { query } = require('../lib/snowflake');
 const requireAuth = require('../lib/auth');
-
-function getPrivateKey() {
-  const key = process.env.SNOWFLAKE_PRIVATE_KEY.replace(/\\n/g, '\n');
-  return crypto.createPrivateKey({ key, format: 'pem' })
-    .export({ type: 'pkcs8', format: 'pem' });
-}
-
-function getConnection() {
-  return snowflake.createConnection({
-    account:       process.env.SNOWFLAKE_ACCOUNT,
-    username:      process.env.SNOWFLAKE_USERNAME,
-    authenticator: 'SNOWFLAKE_JWT',
-    privateKey:    getPrivateKey(),
-    database:      process.env.SNOWFLAKE_DATABASE,
-    schema:        process.env.SNOWFLAKE_SCHEMA,
-    warehouse:     process.env.SNOWFLAKE_WAREHOUSE,
-    role:          process.env.SNOWFLAKE_ROLE,
-  });
-}
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -30,28 +10,23 @@ module.exports = async function handler(req, res) {
   const user = requireAuth(req, res);
   if (!user) return;
 
-  const conn = getConnection();
+  // ?window=prev -> previous full month; ?window=shopify -> Shopify coupon
+  // batch order lines (accumulates since batch start); default -> month-to-date.
+  // Whitelist mapping (never interpolate user input into SQL).
+  const w = req.query && req.query.window;
+  const sqlText =
+    w === 'prev'    ? 'SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.PREV_MONTH_ORDER_COUPON_PROFIT ORDER BY ORDER_DATE ASC' :
+    w === 'shopify' ? 'SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.SHOPIFY_COUPON_ORDER_PROFIT ORDER BY ORDER_DATE ASC, ORDER_ID ASC' :
+                      'SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.DAILY_ORDER_COUPON_PROFIT ORDER BY ORDER_DATE ASC';
+
   try {
-    await new Promise((resolve, reject) => conn.connect(err => err ? reject(err) : resolve()));
-    const rows = await new Promise((resolve, reject) => {
-      conn.execute({
-        // ?window=prev -> previous full month; ?window=shopify -> Shopify coupon
-        // batch order lines (accumulates since batch start); default -> month-to-date.
-        // Whitelist mapping (never interpolate user input into SQL).
-        sqlText: (() => {
-          const w = req.query && req.query.window;
-          if (w === 'prev')    return 'SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.PREV_MONTH_ORDER_COUPON_PROFIT ORDER BY ORDER_DATE ASC';
-          if (w === 'shopify') return 'SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.SHOPIFY_COUPON_ORDER_PROFIT ORDER BY ORDER_DATE ASC, ORDER_ID ASC';
-          return 'SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.DAILY_ORDER_COUPON_PROFIT ORDER BY ORDER_DATE ASC';
-        })(),
-        complete: (err, stmt, rows) => err ? reject(err) : resolve(rows),
-      });
-    });
+    const rows = await query(sqlText);
+    // Data refreshes once daily — let the browser reuse the response for an
+    // hour (private: responses are per-login, must not hit shared caches).
+    res.setHeader('Cache-Control', 'private, max-age=3600');
     res.status(200).json(rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
-  } finally {
-    conn.destroy(() => {});
   }
 };
