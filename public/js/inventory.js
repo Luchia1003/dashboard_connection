@@ -374,7 +374,7 @@ function renderForecastTable() {
       <td style="text-align:right;">
         <div style="${V}color:var(--text);">${fmtInt(fc60d)}</div>
         <div style="font-size:10px;color:var(--text3);margin-top:1px;">${r._fc.currPart != null
-          ? `mo left ${fmtInt(r._fc.currPart)} · +${horizonN} mo ${fmtInt(r._fc.monthsSum)}${r._fc.capped ? ' · <span style="color:#f59e0b;">capped</span>' : ''}`
+          ? `mo left ${fmtInt(r._fc.currPart)}`
           : `curr ${fmtInt(r.FORECAST_CURR_MONTH)} · next ${fmtInt(r.FORECAST_NEXT_MONTH)}`}</div>
       </td>
       <td style="text-align:right;"><span style="${V}color:${needColor};">${fmtInt(restockNeed)}</span></td>
