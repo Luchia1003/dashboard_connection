@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/api/inventory-reconciliation", "destination": "/api/inventory-pool?view=reconciliation" },
+    { "source": "/api/ads-pl", "destination": "/api/fba-aging?view=ads_pl" },
     { "source": "/api/(.*)", "destination": "/api/$1" }
   ],
   "outputDirectory": "public"

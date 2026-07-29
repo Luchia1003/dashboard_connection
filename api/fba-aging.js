@@ -11,7 +11,12 @@ module.exports = async function handler(req, res) {
   if (!user) return;
 
   try {
-    const rows = await query(`SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.AGING_INVENTORY_ENRICHED ORDER BY DAYS_SINCE_LAST_ORDER ASC, AVAILABLE DESC`);
+    // ?view=ads_pl → the Marketing page's Google Ads P&L view (30d product-level).
+    // Whitelist-mapped: user input never reaches the SQL string.
+    const sql = req.query && req.query.view === 'ads_pl'
+      ? `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.ADS_PL_ENRICHED ORDER BY COST DESC`
+      : `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.AGING_INVENTORY_ENRICHED ORDER BY DAYS_SINCE_LAST_ORDER ASC, AVAILABLE DESC`;
+    const rows = await query(sql);
     // Data refreshes once daily — let the browser reuse the response for an
     // hour (private: responses are per-login, must not hit shared caches).
     res.setHeader('Cache-Control', 'private, max-age=3600');

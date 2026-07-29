@@ -45,6 +45,7 @@ const HDR_VIEWS = {
   ac_sku: { defaults: { k: 'cause',                 d: 'desc', k2: 'profit',     d2: 'asc'  }, ascFirst: ['sku', 'platform', 'supplier'],                      render: 'acLossRerender' },
   ac_inv: { defaults: { k: 'diff',                  d: 'desc', k2: null,         d2: 'desc' }, ascFirst: ['sku', 'status', 'master_flag', 'override', 'missed', 'warehouse'], render: 'acInvRerender' },
   ac_rst: { defaults: { k: 'urgency',               d: 'desc', k2: 'est_profit', d2: 'desc' }, ascFirst: ['sku', 'channel', 'cover'],                          render: 'acRestockRerender' },
+  mk:     { defaults: { k: 'cost',                  d: 'desc', k2: null,         d2: 'desc' }, ascFirst: ['product', 'brand', 'tier'],                         render: 'renderMarketingPage' },
 };
 
 function hdrState(view) {
@@ -644,7 +645,7 @@ function rerender() {
 
 // Pages whose body is a single full-height table (content doesn't scroll; the
 // table body does). Everything else is a normal vertical-scroll page.
-const TABLE_PAGES = ['products', 'orderDetail', 'coupon', 'inventory', 'action'];
+const TABLE_PAGES = ['products', 'orderDetail', 'coupon', 'inventory', 'action', 'marketing'];
 
 function switchPage(page) {
   S.page = page;
@@ -659,12 +660,14 @@ function switchPage(page) {
   document.getElementById('couponSection').style.display      = page === 'coupon'      ? shown  : 'none';
   document.getElementById('inventorySection').style.display   = page === 'inventory'   ? shown  : 'none';
   document.getElementById('actionSection').style.display      = page === 'action'      ? shown  : 'none';
+  document.getElementById('marketingSection').style.display   = page === 'marketing'   ? shown  : 'none';
   document.getElementById('navSales').classList.toggle('active',       page === 'sales');
   document.getElementById('navProducts').classList.toggle('active',    page === 'products');
   document.getElementById('navOrderDetail').classList.toggle('active', page === 'orderDetail');
   document.getElementById('navCoupon').classList.toggle('active',      page === 'coupon');
   document.getElementById('navInventory').classList.toggle('active',   page === 'inventory');
   document.getElementById('navAction').classList.toggle('active',      page === 'action');
+  document.getElementById('navMarketing').classList.toggle('active',   page === 'marketing');
   const titles = {
     sales: 'Sales Dashboard',
     products: 'Product Detail',
@@ -672,11 +675,13 @@ function switchPage(page) {
     coupon: 'Coupon Order',
     inventory: 'Inventory',
     action: 'Action Center',
+    marketing: 'Marketing · Ads P&L',
   };
   document.getElementById('pageTitle').textContent = titles[page] || 'Dashboard';
   // Inventory / Coupon / Order Detail have their own internal filters and don't use the global time range.
   // Action Center keeps the topbar Time Range because its SKU-level insights follow it.
-  const hideTopbar = page === 'coupon' || page === 'orderDetail' || page === 'inventory';
+  // Marketing is a fixed trailing-30d view, so the global time range doesn't apply either.
+  const hideTopbar = page === 'coupon' || page === 'orderDetail' || page === 'inventory' || page === 'marketing';
   document.getElementById('trControls').style.display = hideTopbar ? 'none' : 'flex';
 
   // Page-level toggles live in the topbar (next to the title) to save a row.
@@ -694,6 +699,8 @@ function switchPage(page) {
     loadInventoryData();
   } else if (page === 'action') {
     loadActionCenterData();
+  } else if (page === 'marketing') {
+    loadMarketingData();
   } else if (S.daily && S.sku) {
     if (page === 'sales') renderSalesPage();
     else renderProductsPage();
