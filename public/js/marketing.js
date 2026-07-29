@@ -6,10 +6,10 @@
 // orders, COGS-adjusted margin, and the GMC market price benchmark.
 //
 // TIER (computed in the view):
-//   PROFITABLE     — est. ad profit (ads revenue × margin − cost) > 0
-//   UNPROFITABLE   — generated sales, but est. ad profit ≤ 0
-//   CUT_CANDIDATE  — ≥ $50 spend and zero basket revenue → exclude / reprice
-//   LONG_TAIL      — zero basket revenue, small spend (watch total, not rows)
+//   PROFITABLE      — est. ad profit (ads revenue × margin − cost) > 0
+//   UNPROFITABLE    — generated sales, but est. ad profit ≤ 0
+//   NO_BASKET_SALES — ad clicks led to zero attributed purchases (sort by Ad
+//                     Cost to find the big burners inside this tier)
 
 async function loadMarketingData() {
   if (S.adsPl) {
@@ -19,7 +19,7 @@ async function loadMarketingData() {
 
   document.getElementById('marketingHead').innerHTML = '';
   document.getElementById('marketingBody').innerHTML =
-    `<tr><td colspan="13" style="text-align:center;padding:48px;color:var(--text3);">
+    `<tr><td colspan="14" style="text-align:center;padding:48px;color:var(--text3);">
        <div style="display:inline-block;width:28px;height:28px;border:2px solid var(--border);border-top-color:#0ea5e9;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px;"></div>
        <div>Loading ads P&amp;L…</div>
      </td></tr>`;
@@ -36,7 +36,7 @@ async function loadMarketingData() {
   } catch (err) {
     if (err.message === 'unauthorized') return; // swrJSON already redirected to login
     document.getElementById('marketingBody').innerHTML =
-      `<tr><td colspan="13" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
+      `<tr><td colspan="14" style="text-align:center;padding:40px;color:#ef4444;font-size:13px;">${err.message}</td></tr>`;
   }
 }
 window.loadMarketingData = loadMarketingData;
@@ -66,10 +66,9 @@ window.clearMarketingSearch = clearMarketingSearch;
 // ── Chips ─────────────────────────────────────────────────────────────────────
 
 const MK_TIER_META = {
-  PROFITABLE:    { label: 'Profitable',    fg: '#10b981', bg: 'rgba(16,185,129,.12)' },
-  UNPROFITABLE:  { label: 'Unprofitable',  fg: '#f59e0b', bg: 'rgba(245,158,11,.12)' },
-  CUT_CANDIDATE: { label: 'Cut Candidate', fg: '#ef4444', bg: 'rgba(239,68,68,.12)'  },
-  LONG_TAIL:     { label: 'Long Tail',     fg: 'var(--text3)', bg: 'rgba(100,116,139,.12)' },
+  PROFITABLE:      { label: 'Profitable',      fg: '#10b981', bg: 'rgba(16,185,129,.12)' },
+  UNPROFITABLE:    { label: 'Unprofitable',    fg: '#f59e0b', bg: 'rgba(245,158,11,.12)' },
+  NO_BASKET_SALES: { label: 'No Basket Sales', fg: '#ef4444', bg: 'rgba(239,68,68,.12)'  },
 };
 
 function mkTierChip(t) {
@@ -113,7 +112,7 @@ function renderMarketingPage() {
   const kCost   = sum(all, 'COST');
   const kRev    = sum(all, 'ADS_REVENUE');
   const kProfit = sum(all, 'AD_PROFIT_EST');
-  const zero    = all.filter(r => r.TIER === 'LONG_TAIL' || r.TIER === 'CUT_CANDIDATE');
+  const zero    = all.filter(r => r.TIER === 'NO_BASKET_SALES');
   const kZeroCost = sum(zero, 'COST');
   const kpi = (label, value, sub, color) => `
     <div class="card" style="padding:14px 16px;">
@@ -137,6 +136,7 @@ function renderMarketingPage() {
       ${hdrTh('mk', 'brand', 'Brand', { min: '110px' })}
       ${hdrTh('mk', 'tier', 'Tier', { min: '110px' })}
       ${hdrTh('mk', 'clicks', 'Clicks', { min: '70px' })}
+      ${hdrTh('mk', 'impr', 'Impr.', { min: '80px' })}
       ${hdrTh('mk', 'cost', 'Ad Cost', { min: '90px' })}
       ${hdrTh('mk', 'lead_units', 'Lead Units', { min: '90px' })}
       ${hdrTh('mk', 'ads_revenue', 'Basket Rev', { min: '100px' })}
@@ -153,6 +153,7 @@ function renderMarketingPage() {
     brand:       r => String(r.VENDOR || '').toLowerCase(),
     tier:        r => String(r.TIER || ''),
     clicks:      r => Number(r.CLICKS)                 || 0,
+    impr:        r => Number(r.IMPRESSIONS)            || 0,
     cost:        r => Number(r.COST)                   || 0,
     lead_units:  r => Number(r.LEAD_UNITS_SOLD)        || 0,
     ads_revenue: r => Number(r.ADS_REVENUE)            || 0,
@@ -173,7 +174,7 @@ function renderMarketingPage() {
   const tbody = document.getElementById('marketingBody');
   if (!rows.length) {
     const msg = searchRaw.trim() ? `No products matching "${searchRaw}"` : 'No rows for this filter';
-    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--text3);">${msg}</td></tr>`;
     return;
   }
 
@@ -193,7 +194,8 @@ function renderMarketingPage() {
       </td>
       <td style="text-align:right;">${manufacturerChip(r.VENDOR)}</td>
       <td style="text-align:right;">${mkTierChip(r.TIER)}</td>
-      <td style="text-align:right;" title="${fmt(Number(r.IMPRESSIONS), 'int')} impressions"><span style="${V}color:var(--text);">${fmtInt(r.CLICKS)}</span></td>
+      <td style="text-align:right;"><span style="${V}color:var(--text);">${fmtInt(r.CLICKS)}</span></td>
+      <td style="text-align:right;"><span style="font-size:13px;color:var(--text2);">${fmtInt(r.IMPRESSIONS)}</span></td>
       <td style="text-align:right;"><span style="${V}color:var(--text);">${fmtMoney(r.COST)}</span></td>
       <td style="text-align:right;" title="Units of THIS product bought after its ad was clicked (Google cart data)"><span style="${V}color:var(--text);">${fmtNum(r.LEAD_UNITS_SOLD, 1)}</span></td>
       <td style="text-align:right;vertical-align:top;" title="lead ${fmtMoney(r.LEAD_REVENUE)} + cross-sell ${fmtMoney(r.CROSS_SELL_REVENUE)}">
