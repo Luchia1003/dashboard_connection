@@ -19,7 +19,12 @@ module.exports = async function handler(req, res) {
     const rows = await query(sql);
     // Data refreshes once daily — let the browser reuse the response for an
     // hour (private: responses are per-login, must not hit shared caches).
-    res.setHeader('Cache-Control', 'private, max-age=3600');
+    // ads_pl: no HTTP caching — the frontend's IndexedDB SWR layer already
+    // gives instant paint, and an HTTP-cached response makes its background
+    // revalidation fetch the same stale payload for an hour after any view
+    // logic change (tiers looked "stuck" even after a hard refresh).
+    res.setHeader('Cache-Control',
+      req.query && req.query.view === 'ads_pl' ? 'private, no-store' : 'private, max-age=3600');
     res.status(200).json(rows);
   } catch (err) {
     console.error(err);

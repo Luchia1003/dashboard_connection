@@ -25,7 +25,9 @@ async function loadMarketingData() {
      </td></tr>`;
 
   try {
-    const rows = await swrJSON('/api/ads-pl', d => {
+    // ?v=2 busts both cache layers (IndexedDB key + browser HTTP cache) after
+    // the tier-merge schema change — bump it whenever the view logic changes.
+    const rows = await swrJSON('/api/ads-pl?v=2', d => {
       S.adsPl = d;
       populateMarketingBrands();
       if (S.page === 'marketing') renderMarketingPage();
