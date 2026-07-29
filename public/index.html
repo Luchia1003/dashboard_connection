@@ -975,13 +975,13 @@
             CSV
           </button>
         </div>
-        <!-- Methodology legend (full-width bottom row, left-aligned) -->
-        <div class="toolbar-note">
+        <!-- Methodology legend (two columns to keep the toolbar short) -->
+        <div class="toolbar-note" style="display:grid;grid-template-columns:1fr 1fr;column-gap:32px;row-gap:2px;">
           <div><b>Tier:</b> <span style="color:#10b981;">Profitable</span> = est. ad profit &gt; 0 · <span style="color:#f59e0b;">Unprofitable</span> = has basket sales but profit ≤ 0 · <span style="color:#ef4444;">No Basket Sales</span> = ad clicks led to zero attributed purchases</div>
-          <div><b>Basket Rev</b> (Google cart data, orders placed after an ad click): <b>L</b> = lead, the advertised product itself · <b>X</b> = cross-sell, other products bought in the same order</div>
-          <div><b>Lead Units:</b> units of THIS product bought after its ad was clicked — Google attribution credit, can be fractional</div>
           <div><b>Shop 30d:</b> our own Shopify orders in the same 30 days, ALL traffic (not just ads) — the reality check next to Google's numbers</div>
+          <div><b>Basket Rev</b> (Google cart data, orders placed after an ad click): <b>L</b> = lead, the advertised product itself · <b>X</b> = cross-sell, other products bought in the same order</div>
           <div><b>Margin %:</b> product's 90d margin after platform fees &amp; COGS · <b>*</b> = account average used (no costed sales history) · <b>Est. Ad Profit</b> = Basket Rev × Margin % − Ad Cost</div>
+          <div><b>Lead Units:</b> units of THIS product bought after its ad was clicked — Google attribution credit, can be fractional</div>
           <div><b>vs Market:</b> our price vs Google Shopping click-weighted benchmark for the same product at other retailers · — = no benchmark data</div>
         </div>
       </div>
