@@ -557,8 +557,8 @@ async function loadCouponShopData() {
      </td></tr>`;
   try {
     const [shopSku, shopOrder] = await Promise.all([
-      swrJSON('/api/coupon-sku?window=shopify',   d => { S.couponShopSku = d;   if (S.page === 'coupon') renderCouponPage(); }),
-      swrJSON('/api/coupon-order?window=shopify', d => { S.couponShopOrder = d; if (S.page === 'coupon') renderCouponPage(); }),
+      swrJSON('/api/coupon-sku?window=shopify&v=2',   d => { S.couponShopSku = d;   if (S.page === 'coupon') renderCouponPage(); }),
+      swrJSON('/api/coupon-order?window=shopify&v=2', d => { S.couponShopOrder = d; if (S.page === 'coupon') renderCouponPage(); }),
     ]);
     S.couponShopSku   = shopSku;
     S.couponShopOrder = shopOrder;
