@@ -540,6 +540,14 @@ function cpBool(v) {
     (typeof v === 'string' && (v.toLowerCase() === 'true' || v === '1'));
 }
 
+// Batch labels: SUMMER_2026 = the July run, AUGUST_2026 = the August run, etc.
+const CP_BATCH_NAMES = { SUMMER_2026: 'July', AUGUST_2026: 'August' };
+function cpBatchName(b)  { return CP_BATCH_NAMES[b] || String(b || '—'); }
+function cpBatchDates(r) {
+  const f = d => String(d || '').slice(5, 10).replace('-', '/');
+  return r && r.START_DATE ? `${f(r.START_DATE)}–${f(r.END_DATE)}` : '';
+}
+
 async function loadCouponShopData() {
   document.getElementById('couponHead').innerHTML = '';
   document.getElementById('couponBody').innerHTML =
@@ -602,27 +610,43 @@ function cpPopulateShopPct() {
 
 function cpShopSummary() {
   const scope = (document.getElementById('couponShopScope') || {}).value || 'target';
-  const skus = (S.couponShopSku || []).filter(r => scope !== 'target' || cpBool(r.IS_TARGET));
-  const ords = (S.couponShopOrder || []).filter(r => scope !== 'target' || cpBool(r.IS_TARGET));
-  const nTarget = (S.couponShopSku || []).filter(r => cpBool(r.IS_TARGET)).length;
-  const nSwept  = (S.couponShopSku || []).length - nTarget;
-  const orderIds = new Set(ords.map(r => r.ORDER_ID));
-  const units    = ords.reduce((s, r) => s + (Number(r.ORDER_QTY) || 0), 0);
-  const sales    = ords.reduce((s, r) => s + (Number(r.ORDER_PRODUCT_SALES) || 0), 0);
-  const disc     = ords.reduce((s, r) => s + (Number(r.EST_COUPON_DISCOUNT) || 0), 0);
-  const profit   = ords.reduce((s, r) => s + (Number(r.ORDER_PROFIT) || 0), 0);
-  const sold     = skus.filter(r => (Number(r.ORDER_QTY) || 0) > 0).length;
   const box = document.getElementById('couponShopSummary');
   if (!box) return;
-  box.innerHTML =
-    `<b style="color:var(--text);">Summer Sale (HP_SUMMER5–30)</b> · accumulating since ${CP_SHOP_START}` +
-    ` · live scope: <b style="color:var(--text);">${nTarget.toLocaleString()}</b> target SKUs + ${nSwept.toLocaleString()} swept variants` +
-    ` · coupon orders: <b style="color:var(--text);">${orderIds.size.toLocaleString()}</b>` +
-    ` · units <b style="color:var(--text);">${Math.round(units).toLocaleString()}</b>` +
-    ` · sales <b style="color:var(--text);">${fmt(sales)}</b>` +
-    ` · est. coupon given <b style="color:#f59e0b;">${fmt(disc)}</b>` +
-    ` · profit <b style="color:${profit < 0 ? '#ef4444' : '#10b981'};">${fmt(profit)}</b>` +
-    (sold ? ` · SKUs with sales: <b style="color:var(--text);">${sold.toLocaleString()}</b>` : '');
+  // one line per batch (July / August / …), chronological
+  const batches = {};
+  const put = (r, key) => {
+    const b = batches[r.BATCH] = batches[r.BATCH] || { skus: [], ords: [], start: r.START_DATE, row: r };
+    b[key].push(r);
+    if (r.START_DATE && (!b.start || String(r.START_DATE) < String(b.start))) { b.start = r.START_DATE; b.row = r; }
+  };
+  (S.couponShopSku   || []).forEach(r => put(r, 'skus'));
+  (S.couponShopOrder || []).forEach(r => put(r, 'ords'));
+  const lines = Object.keys(batches)
+    .sort((a, b) => String(batches[a].start).localeCompare(String(batches[b].start)))
+    .map(name => {
+      const b = batches[name];
+      const skus = b.skus.filter(r => scope !== 'target' || cpBool(r.IS_TARGET));
+      const ords = b.ords.filter(r => scope !== 'target' || cpBool(r.IS_TARGET));
+      const nTarget = b.skus.filter(r => cpBool(r.IS_TARGET)).length;
+      const nSwept  = b.skus.length - nTarget;
+      const orderIds = new Set(ords.map(r => r.ORDER_ID));
+      const units  = ords.reduce((s, r) => s + (Number(r.ORDER_QTY) || 0), 0);
+      const sales  = ords.reduce((s, r) => s + (Number(r.ORDER_PRODUCT_SALES) || 0), 0);
+      const disc   = ords.reduce((s, r) => s + (Number(r.EST_COUPON_DISCOUNT) || 0), 0);
+      const profit = ords.reduce((s, r) => s + (Number(r.ORDER_PROFIT) || 0), 0);
+      const sold   = skus.filter(r => (Number(r.ORDER_QTY) || 0) > 0).length;
+      return `<b style="color:var(--text);">${cpBatchName(name)}</b>` +
+        ` <span style="color:var(--text3);">(${cpBatchDates(b.row)})</span>` +
+        ` · <b style="color:var(--text);">${nTarget.toLocaleString()}</b> target SKUs` +
+        (nSwept ? ` + ${nSwept.toLocaleString()} swept` : '') +
+        ` · orders <b style="color:var(--text);">${orderIds.size.toLocaleString()}</b>` +
+        ` · units <b style="color:var(--text);">${Math.round(units).toLocaleString()}</b>` +
+        ` · sales <b style="color:var(--text);">${fmt(sales)}</b>` +
+        ` · est. coupon <b style="color:#f59e0b;">${fmt(disc)}</b>` +
+        ` · profit <b style="color:${profit < 0 ? '#ef4444' : '#10b981'};">${fmt(profit)}</b>` +
+        (sold ? ` · SKUs with sales: <b style="color:var(--text);">${sold.toLocaleString()}</b>` : '');
+    });
+  box.innerHTML = lines.length ? lines.join('<div style="height:6px;"></div>') : 'No coupon batches found.';
 }
 
 function renderCouponShopify() {
@@ -647,7 +671,12 @@ function renderCouponShopify() {
 function cpShopBadges(r) {
   const pct = Math.round(Number(r.GROUP_PCT) || 0);
   const tgt = cpBool(r.IS_TARGET);
-  return `<span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px;background:rgba(14,165,233,.12);color:#0ea5e9;border:1px solid rgba(14,165,233,.3);">${pct}%</span>` +
+  const batch = r.BATCH
+    ? `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:6px;vertical-align:middle;
+        background:var(--input);color:var(--text3);border:1px solid var(--border);">${(cpBatchName(r.BATCH) || '').slice(0, 3).toUpperCase()}</span> `
+    : '';
+  return batch +
+    `<span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px;background:rgba(14,165,233,.12);color:#0ea5e9;border:1px solid rgba(14,165,233,.3);">${pct}%</span>` +
     (tgt ? '' : ` <span title="Not a slow-traffic target — variant swept in because Shopify discounts apply per product"
       style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:6px;vertical-align:middle;
       background:rgba(168,85,247,.15);color:#a855f7;border:1px solid rgba(168,85,247,.3);">SWEPT</span>`);
