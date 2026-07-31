@@ -2,6 +2,7 @@ const { query } = require('../lib/snowflake');
 const requireAuth = require('../lib/auth');
 
 module.exports = async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');  // API data must never be cached by the browser
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
