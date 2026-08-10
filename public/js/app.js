@@ -268,7 +268,7 @@ function downloadCouponCSV() {
     return;
   }
   if (!S.couponSku || !S.couponOrder) { loadCouponData(); return; }
-  const dateLabel = S.couponDate || 'mtd';
+  const dateLabel = S.couponDate === '__prev' ? 'last_month' : (S.couponDate || 'mtd');
   const isSku = (S.couponView || 'sku') === 'sku';
   let rows = isSku
     ? (typeof getCouponSkuFiltered === 'function' ? getCouponSkuFiltered() : S.couponSku)
@@ -484,7 +484,7 @@ function updateDownloadHints() {
       cpH.innerHTML = HINT_PREFIX + hintParts(q ? ['Shopify', lvl, scope, `search: "${q}"`] : ['Shopify', lvl, scope]);
     } else {
       const view = (S.couponView === 'order') ? 'Order level' : 'SKU level';
-      const date = S.couponDate || 'Month-to-date';
+      const date = S.couponDate === '__prev' ? 'Last month' : (S.couponDate || 'Month-to-date');
       const sEl = document.getElementById(S.couponView === 'order' ? 'couponOrdSearch' : 'couponSkuSearch');
       const q = String((sEl || {}).value || '').trim();
       cpH.innerHTML = HINT_PREFIX + hintParts(q ? [view, date, `search: "${q}"`] : [view, date]);

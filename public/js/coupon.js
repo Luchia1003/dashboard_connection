@@ -1,35 +1,45 @@
 // ── Coupon Order Page ─────────────────────────────────────────────────────────
-// Data = month-to-date: 1st of current month → yesterday.
-// (On the 1st of a month the tables hold the FULL previous month, since order
-// data only exists up to "yesterday".) Rebuilt daily by the coupon pipeline.
+// Data = this month (MTD: 1st → yesterday) + last full month.
+// This month comes from DAILY_*_COUPON_PROFIT, last month from
+// PREV_MONTH_*_COUPON_PROFIT (both rebuilt daily by the coupon pipeline, so
+// late refunds keep landing in either window).
 
 // Coupon uses its own date selector — independent of the global topbar filter.
+// S.couponDate: '' = This Month, '__prev' = Last Month, 'YYYY-MM-DD' = one day.
+// A single date is looked up in both windows; the current month wins if the
+// same date appears in both (only happens on the 1st, when DAILY_* still
+// holds the full previous month).
+function cpWindowRows(cur, prev) {
+  const d = S.couponDate;
+  if (d === '__prev') return prev || [];
+  if (!d) return cur || [];
+  const inCur = (cur || []).filter(r => String(r.ORDER_DATE).slice(0, 10) === d);
+  if (inCur.length) return inCur;
+  return (prev || []).filter(r => String(r.ORDER_DATE).slice(0, 10) === d);
+}
+
 function getCouponSkuFiltered() {
-  if (!S.couponSku) return [];
-  let rows = S.couponSku;
-  if (S.couponDate) rows = rows.filter(row => String(row.ORDER_DATE).slice(0, 10) === S.couponDate);
-  return cpSupplierFilter(rows);
+  return cpSupplierFilter(cpWindowRows(S.couponSku, S.couponSkuPrev));
 }
 
 function getCouponOrderFiltered() {
-  if (!S.couponOrder) return [];
-  let rows = S.couponOrder;
-  if (S.couponDate) rows = rows.filter(row => String(row.ORDER_DATE).slice(0, 10) === S.couponDate);
-  return cpSupplierFilter(rows);
+  return cpSupplierFilter(cpWindowRows(S.couponOrder, S.couponOrderPrev));
 }
 
-// Populate the date dropdown from every ORDER_DATE present (the MTD window).
+// Populate the date dropdown: the two month windows first, then every
+// ORDER_DATE present in either month.
 function populateCouponDates() {
   const allDates = new Set();
-  (S.couponSku   || []).forEach(r => r.ORDER_DATE && allDates.add(String(r.ORDER_DATE).slice(0, 10)));
-  (S.couponOrder || []).forEach(r => r.ORDER_DATE && allDates.add(String(r.ORDER_DATE).slice(0, 10)));
+  [S.couponSku, S.couponOrder, S.couponSkuPrev, S.couponOrderPrev].forEach(arr =>
+    (arr || []).forEach(r => r.ORDER_DATE && allDates.add(String(r.ORDER_DATE).slice(0, 10))));
   const sorted = [...allDates].sort().reverse();
   const sel = document.getElementById('couponDateSel');
   if (!sel) return;
   sel.innerHTML = `<option value="">This Month</option>` +
+    `<option value="__prev">Last Month</option>` +
     sorted.map(d => `<option value="${d}">${d}</option>`).join('');
-  // Restore previously selected date if still valid
-  if (S.couponDate && sorted.includes(S.couponDate)) sel.value = S.couponDate;
+  // Restore previous selection if still valid
+  if (S.couponDate === '__prev' || (S.couponDate && sorted.includes(S.couponDate))) sel.value = S.couponDate;
   else { S.couponDate = ''; sel.value = ''; }
 }
 
@@ -121,7 +131,8 @@ function cpPopulateSupplierSel() {
   const isShop = (S.couponPlatform || 'amazon') === 'shopify';
   const src = isShop
     ? [...(S.couponShopSku || []), ...(S.couponShopOrder || [])]
-    : [...(S.couponSku || []), ...(S.couponOrder || [])];
+    : [...(S.couponSku || []), ...(S.couponOrder || []),
+       ...(S.couponSkuPrev || []), ...(S.couponOrderPrev || [])];
   const names = new Set();
   let hasUnknown = false;
   src.forEach(r => { const m = cpSupplier(r.SKU); if (m) names.add(m); else hasUnknown = true; });
@@ -254,7 +265,7 @@ const CP_SHOP_ORD_FNS = {
 // ── Load (lazy, first visit only) ────────────────────────────────────────────
 
 async function loadCouponData() {
-  if (S.couponSku && S.couponOrder) {
+  if (S.couponSku && S.couponOrder && S.couponSkuPrev && S.couponOrderPrev) {
     renderCouponPage();
     return;
   }
@@ -267,13 +278,18 @@ async function loadCouponData() {
      </td></tr>`;
 
   try {
-    const [couponSku, couponOrder] = await Promise.all([
-      swrJSON('/api/coupon-sku',   d => { S.couponSku = d;   populateCouponDates(); if (S.page === 'coupon') renderCouponPage(); }),
-      swrJSON('/api/coupon-order', d => { S.couponOrder = d; if (S.page === 'coupon') renderCouponPage(); }),
+    const upd = key => d => { S[key] = d; populateCouponDates(); if (S.page === 'coupon') renderCouponPage(); };
+    const [couponSku, couponOrder, couponSkuPrev, couponOrderPrev] = await Promise.all([
+      swrJSON('/api/coupon-sku',               upd('couponSku')),
+      swrJSON('/api/coupon-order',             upd('couponOrder')),
+      swrJSON('/api/coupon-sku?window=prev',   upd('couponSkuPrev')),
+      swrJSON('/api/coupon-order?window=prev', upd('couponOrderPrev')),
     ]);
 
-    S.couponSku   = couponSku;
-    S.couponOrder = couponOrder;
+    S.couponSku       = couponSku;
+    S.couponOrder     = couponOrder;
+    S.couponSkuPrev   = couponSkuPrev;
+    S.couponOrderPrev = couponOrderPrev;
 
     populateCouponDates();
     renderCouponPage();
@@ -346,7 +362,7 @@ function renderCouponPage() {
     if (!S.couponShopSku || !S.couponShopOrder) { loadCouponShopData(); return; }
     renderCouponShopify();
   } else {
-    if (!S.couponSku || !S.couponOrder) { loadCouponData(); return; }
+    if (!S.couponSku || !S.couponOrder || !S.couponSkuPrev || !S.couponOrderPrev) { loadCouponData(); return; }
     if ((S.couponView || 'sku') === 'sku') renderCouponSkuTable();
     else renderCouponOrderTable();
   }
@@ -355,7 +371,8 @@ function renderCouponPage() {
 window.renderCouponPage = renderCouponPage;
 
 // ── SKU Level ─────────────────────────────────────────────────────────────────
-// One row per (ORDER_DATE, SKU) from DAILY_SKU_COUPON_PROFIT, month-to-date.
+// One row per (ORDER_DATE, SKU) from DAILY_SKU_COUPON_PROFIT (this month) /
+// PREV_MONTH_SKU_COUPON_PROFIT (last month).
 
 function renderCouponSkuTable() {
   const data      = getCouponSkuFiltered();
@@ -430,7 +447,8 @@ function renderCouponSkuTable() {
 }
 
 // ── Order Level ───────────────────────────────────────────────────────────────
-// One row per (ORDER_ID, SKU) from DAILY_ORDER_COUPON_PROFIT, month-to-date.
+// One row per (ORDER_ID, SKU) from DAILY_ORDER_COUPON_PROFIT (this month) /
+// PREV_MONTH_ORDER_COUPON_PROFIT (last month).
 
 function renderCouponOrderTable() {
   const data     = getCouponOrderFiltered();
