@@ -609,7 +609,6 @@ function cpPopulateShopPct() {
 }
 
 function cpShopSummary() {
-  const scope = (document.getElementById('couponShopScope') || {}).value || 'target';
   const box = document.getElementById('couponShopSummary');
   if (!box) return;
   // one line per batch (July / August / …), chronological
@@ -625,10 +624,9 @@ function cpShopSummary() {
     .sort((a, b) => String(batches[a].start).localeCompare(String(batches[b].start)))
     .map(name => {
       const b = batches[name];
-      const skus = b.skus.filter(r => scope !== 'target' || cpBool(r.IS_TARGET));
-      const ords = b.ords.filter(r => scope !== 'target' || cpBool(r.IS_TARGET));
-      const nTarget = b.skus.filter(r => cpBool(r.IS_TARGET)).length;
-      const nSwept  = b.skus.length - nTarget;
+      // Summary is always the batch TOTAL (targets + swept), independent of the Scope filter.
+      const skus = b.skus;
+      const ords = b.ords;
       const orderIds = new Set(ords.map(r => r.ORDER_ID));
       const units  = ords.reduce((s, r) => s + (Number(r.ORDER_QTY) || 0), 0);
       const sales  = ords.reduce((s, r) => s + (Number(r.ORDER_PRODUCT_SALES) || 0), 0);
@@ -637,8 +635,7 @@ function cpShopSummary() {
       const sold   = skus.filter(r => (Number(r.ORDER_QTY) || 0) > 0).length;
       return `<b style="color:var(--text);">${cpBatchName(name)}</b>` +
         ` <span style="color:var(--text3);">(${cpBatchDates(b.row)})</span>` +
-        ` · <b style="color:var(--text);">${nTarget.toLocaleString()}</b> target SKUs` +
-        (nSwept ? ` + ${nSwept.toLocaleString()} swept` : '') +
+        ` · <b style="color:var(--text);">${skus.length.toLocaleString()}</b> SKUs` +
         ` · orders <b style="color:var(--text);">${orderIds.size.toLocaleString()}</b>` +
         ` · units <b style="color:var(--text);">${Math.round(units).toLocaleString()}</b>` +
         ` · sales <b style="color:var(--text);">${fmt(sales)}</b>` +
