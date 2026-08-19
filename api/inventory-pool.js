@@ -20,9 +20,9 @@ module.exports = async function handler(req, res) {
 
   try {
     const rows = await query(`SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.${table}`);
-    // Data refreshes once daily — let the browser reuse the response for an
-    // hour (private: responses are per-login, must not hit shared caches).
-    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.setHeader('Cache-Control', 'no-store');  // never let the browser HTTP-cache API data:
+    // swrJSON already caches in IndexedDB, and a stale HTTP entry cannot be cleared
+    // by Cmd+Shift+R (script fetches do not revalidate on hard reload).
     res.status(200).json(rows);
   } catch (err) {
     console.error(err);

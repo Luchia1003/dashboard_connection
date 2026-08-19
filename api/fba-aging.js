@@ -17,14 +17,11 @@ module.exports = async function handler(req, res) {
       ? `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.ADS_PL_ENRICHED ORDER BY COST DESC`
       : `SELECT * FROM SKU_PROFIT_PROJECT.DASHBOARD_DB.AGING_INVENTORY_ENRICHED ORDER BY DAYS_SINCE_LAST_ORDER ASC, AVAILABLE DESC`;
     const rows = await query(sql);
-    // Data refreshes once daily — let the browser reuse the response for an
-    // hour (private: responses are per-login, must not hit shared caches).
     // ads_pl: no HTTP caching — the frontend's IndexedDB SWR layer already
     // gives instant paint, and an HTTP-cached response makes its background
     // revalidation fetch the same stale payload for an hour after any view
     // logic change (tiers looked "stuck" even after a hard refresh).
-    res.setHeader('Cache-Control',
-      req.query && req.query.view === 'ads_pl' ? 'private, no-store' : 'private, max-age=3600');
+    res.setHeader('Cache-Control', 'no-store');
     res.status(200).json(rows);
   } catch (err) {
     console.error(err);

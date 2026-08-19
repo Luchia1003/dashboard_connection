@@ -53,7 +53,15 @@
   // Fetch url → { hash, data }. Hash is over the raw body so "did the daily
   // refresh actually change anything" is answered exactly, not heuristically.
   async function fetchJSON(url) {
-    const r = await fetch(url);
+    // cache:'no-store' is load-bearing. The API sets Cache-Control:
+    // private, max-age=3600, so without it the browser answers this fetch from
+    // its own HTTP cache for up to an hour — and a hard reload does NOT force
+    // script-initiated fetches to revalidate. Net effect: the pipeline finishes
+    // at 02:45, you reload, and the page still shows yesterday with no way to
+    // force it short of clearing site data. The SWR layer below already does
+    // the caching (IndexedDB + SHA-256 of the body), so the HTTP cache on top
+    // of it is pure downside.
+    const r = await fetch(url, { cache: 'no-store' });
     if (r.status === 401) {
       window.location.href = '/login.html';
       throw new Error('unauthorized');
